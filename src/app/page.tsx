@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { checkHealth } from "@/lib/api";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Home() {
-  const [status, setStatus] = useState<string>("checking...");
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    checkHealth()
-      .then((data) => setStatus(JSON.stringify(data)))
-      .catch(() => setStatus("backend unreachable"));
-  }, []);
+    if (loading) return;
+    router.push(user ? "/dashboard" : "/login");
+  }, [user, loading, router]);
 
   return (
     <main className="p-8">
-      <h1 className="text-xl font-bold">TeamDesk — Milestone 0</h1>
-      <p className="mt-4">Backend health: {status}</p>
+      <p>Loading...</p>
     </main>
   );
 }
