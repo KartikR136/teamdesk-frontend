@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TeamDesk — Frontend
 
-## Getting Started
+Next.js frontend for TeamDesk, a multi-tenant issue-tracking platform. See the [backend README](https://github.com/YOUR_USERNAME/teamdesk-backend) for full architecture and security model details — this document covers frontend-specific setup and structure.
 
-First, run the development server:
+## Tech stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js (App Router), TypeScript
+- Tailwind CSS
+- Cookie-based authentication (httpOnly cookies managed entirely by the backend — the frontend never reads or stores tokens directly)
+
+## Project structure
+
+```
+teamdesk-frontend/
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   ├── signup/
+│   │   │   └── page.tsx
+│   │   └── dashboard/
+│   │       ├── page.tsx
+│   │       └── projects/
+│   │           └── [projectId]/
+│   │               └── page.tsx
+│   ├── components/
+│   │   └── OrgSwitcher.tsx
+│   └── lib/
+│       ├── api.ts
+│       ├── AuthContext.tsx
+│       ├── OrgContext.tsx
+│       └── ProtectedRoute.tsx
+├── .env.local.example
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Key design points
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **`src/lib/api.ts`** is the single shared API client. All authenticated requests go through it. It automatically retries once after a silent token refresh on a 401, using a single-flight guard so concurrent 401s don't trigger duplicate refresh calls (which would otherwise race against refresh token rotation on the backend).
+- **`ProtectedRoute`** is the one place that reacts to a session becoming invalid (expired refresh token, logout, etc.) and redirects to `/login`. Every authenticated page should be wrapped in it.
+- **`OrgContext`** tracks which organization the user is currently "acting in" in the UI. This is purely a UI convenience — it is never used for authorization. All real authorization happens server-side, derived from the authenticated user and the resource being accessed, regardless of what the frontend currently has selected.
+- Role-based UI (e.g., hiding a "Create Project" button from a VIEWER) is UX polish only. The backend enforces the actual permission check independently — removing or bypassing the UI element would not grant access.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Local development setup
 
-## Learn More
+1. Ensure `teamdesk-backend` is running locally at `http://localhost:4000` (see its README).
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy `.env.local.example` to `.env.local` and set `NEXT_PUBLIC_API_URL` to your backend URL.
+4. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+5. Visit `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable              | Description                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | Base URL of the backend API (e.g., `http://localhost:4000` locally, or the deployed Render URL in production) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployed via Vercel. `NEXT_PUBLIC_API_URL` is set in the Vercel project's environment variables to point at the deployed backend, and must match one of the origins allow-listed in the backend's CORS configuration.
