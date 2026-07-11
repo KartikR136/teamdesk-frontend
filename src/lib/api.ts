@@ -66,5 +66,14 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     throw new ApiError(res.status, body.error || "Request failed");
   }
 
+  // 204 No Content (e.g. DELETE /api/comments/:id) has no body — calling
+  // res.json() on an empty body throws a SyntaxError, which would otherwise
+  // get misread by callers as a failed request even though res.ok is true.
+  // Content-Length can be absent on some responses even with a body, so
+  // status code is the more reliable check here.
+  if (res.status === 204) {
+    return null;
+  }
+
   return res.json();
 }
