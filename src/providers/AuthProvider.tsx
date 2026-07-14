@@ -8,13 +8,8 @@ import {
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, registerSessionExpiredHandler } from "./api";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-}
+import { apiFetch, registerSessionExpiredHandler } from "@/lib/api";
+import type { User } from "@/types";
 
 interface AuthContextValue {
   user: User | null;
@@ -38,16 +33,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [router]);
 
-  // On app load, we don't have a "who am I" endpoint yet — added below.
   useEffect(() => {
-    apiFetch("/api/auth/me")
+    apiFetch<User>("/api/auth/me")
       .then((data) => setUser(data))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
   async function login(email: string, password: string) {
-    const data = await apiFetch("/api/auth/login", {
+    const data = await apiFetch<User>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
@@ -55,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signup(email: string, password: string, name: string) {
-    const data = await apiFetch("/api/auth/signup", {
+    const data = await apiFetch<User>("/api/auth/signup", {
       method: "POST",
       body: JSON.stringify({ email, password, name }),
     });

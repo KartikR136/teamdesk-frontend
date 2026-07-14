@@ -1,101 +1,136 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useOrg } from "@/lib/OrgContext";
-import { ProtectedRoute } from "@/lib/ProtectedRoute";
-import { DashboardHeader } from "@/components/DashboardHeader";
+import { useOrg } from "@/providers/OrgProvider";
+import { useAuth } from "@/providers/AuthProvider";
+import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
+import { DashboardShell } from "@/components/layout/DashboardShell";
+import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
+import { QuickStats, type StatValue } from "@/components/dashboard/QuickStats";
+import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { ProjectsSection } from "@/components/dashboard/ProjectsSection";
+import { WorkspaceOverview } from "@/components/dashboard/WorkspaceOverview";
 import { apiFetch } from "@/lib/api";
-import Link from "next/link";
-
-interface Project {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
-interface PaginatedResponse<T> {
-  data: T[];
-  hasNextPage: boolean;
-  nextCursor: string | null;
-}
+import type { ActivityEntry, Invitation, Member, PaginatedResponse } from "@/types";
 
 export default function DashboardPage() {
   const { currentOrg, loading: orgLoading } = useOrg();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
+  const { user } = useAuth();
 
+  const [projectStat, setProjectStat] = useState<StatValue | null>(null);
+  const [memberStat, setMemberStat] = useState<StatValue | null>(null);
+  const [activityTodayStat, setActivityTodayStat] = useState<StatValue | null>(null);
+  const [inviteStat, setInviteStat] = useState<StatValue | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  const isAdmin = currentOrg?.role === "ADMIN";
+
+  // Lightweight first-page fetches purely for stat counts. Note: this
+  // duplicates network calls already made by ActivityFeed/WorkspaceOverview
+  // below (both fetch their own copy of members/activity for display).
+  // Acceptable for this milestone — each component stays independently
+  // simple and testable — but worth revisiting if a shared data layer
+  // gets built later (e.g. SWR/React Query cache) so the same first page
+  // isn't fetched three times on one screen load.
   useEffect(() => {
     if (!currentOrg) return;
-    // Since M1, this endpoint returns { data, hasNextPage, nextCursor },
-    // not a bare array.
-    apiFetch(`/api/organizations/${currentOrg.id}/projects`)
-      .then((res: PaginatedResponse<Project>) => {
-        setProjects(res.data);
-        setNextCursor(res.nextCursor);
-      })
-      .catch(() => {
-        setProjects([]);
-        setNextCursor(null);
-      });
-  }, [currentOrg]);
+    let cancelled = false;
 
-  async function loadMore() {
-    if (!currentOrg || !nextCursor) return;
-    setLoadingMore(true);
-    try {
-      const res: PaginatedResponse<Project> = await apiFetch(
-        `/api/organizations/${currentOrg.id}/projects?cursor=${encodeURIComponent(nextCursor)}`,
-      );
-      setProjects((prev) => [...prev, ...res.data]);
-      setNextCursor(res.nextCursor);
-    } finally {
-      setLoadingMore(false);
+    async function loadStats() {
+      setStatsLoading(true);
+
+      const requests: Promise<void>[] = [
+        apiFetch<PaginatedResponse<Member>>(
+          `/api/organizations/${currentOrg!.id}/members`,
+        )
+          .then((res) => {
+            if (!cancelled)
+              setMemberStat({ label: "Members", count: res.data.length, hasMore: res.hasNextPage });
+          })
+          .catch(() => {
+            // Degrade this one card rather than failing the whole page —
+            // e.g. a role that can view the dashboard but not list members.
+            if (!cancelled) setMemberStat({ label: "Members", count: 0, hasMore: false });
+          }),
+        apiFetch<PaginatedResponse<ActivityEntry>>(
+          `/api/organizations/${currentOrg!.id}/activity`,
+        )
+          .then((res) => {
+            if (cancelled) return;
+            const today = new Date();
+            const todayCount = res.data.filter((e) => {
+              const d = new Date(e.createdAt);
+              return (
+                d.getFullYear() === today.getFullYear() &&
+                d.getMonth() === today.getMonth() &&
+                d.getDate() === today.getDate()
+              );
+            }).length;
+            setActivityTodayStat({
+              label: "Activity today",
+              count: todayCount,
+              // We only ever see the first page here, so if that whole page
+              // is today's activity, there may be more today-events beyond
+              // it — flag as a floor in that edge case too.
+              hasMore: res.hasNextPage && todayCount === res.data.length,
+            });
+          })
+          .catch(() => {
+            if (!cancelled) setActivityTodayStat({ label: "Activity today", count: 0, hasMore: false });
+          }),
+      ];
+
+      if (isAdmin) {
+        requests.push(
+          apiFetch<PaginatedResponse<Invitation>>(
+            `/api/organizations/${currentOrg!.id}/invitations`,
+          )
+            .then((res) => {
+              if (!cancelled)
+                setInviteStat({
+                  label: "Pending invites",
+                  count: res.data.length,
+                  hasMore: res.hasNextPage,
+                });
+            })
+            .catch(() => {
+              if (!cancelled) setInviteStat({ label: "Pending invites", count: 0, hasMore: false });
+            }),
+        );
+      }
+
+      await Promise.all(requests);
+      if (!cancelled) setStatsLoading(false);
     }
-  }
 
-  async function handleCreateProject(e: React.FormEvent) {
-    e.preventDefault();
-    if (!currentOrg) return;
-    setError("");
-    try {
-      const project = await apiFetch(
-        `/api/organizations/${currentOrg.id}/projects`,
-        { method: "POST", body: JSON.stringify({ name: newName }) },
-      );
-      setProjects((prev) => [project, ...prev]);
-      setNewName("");
-      setCreating(false);
-    } catch {
-      setError("Could not create project — check your role permissions");
-    }
-  }
+    void loadStats();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrg?.id, isAdmin]);
 
-  // Role-aware UI: hiding this for VIEWER is UX only — the backend's
-  // requireRole("MEMBER") is the real enforcement.
-  const canCreate =
-    currentOrg != null &&
-    ["ADMIN", "MANAGER", "MEMBER"].includes(currentOrg.role);
+  const stats: StatValue[] = [
+    projectStat ?? { label: "Projects", count: 0, hasMore: false },
+    memberStat ?? { label: "Members", count: 0, hasMore: false },
+    activityTodayStat ?? { label: "Activity today", count: 0, hasMore: false },
+    ...(isAdmin ? [inviteStat ?? { label: "Pending invites", count: 0, hasMore: false }] : []),
+  ];
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-zinc-50">
-        <DashboardHeader />
-
-        <main className="max-w-5xl mx-auto px-6 py-10">
+      <DashboardShell>
+        <div className="max-w-5xl mx-auto px-6 py-10">
           {orgLoading && (
-            <p className="text-sm text-zinc-400">Loading organizations…</p>
+            <p className="text-sm text-text-subtle">Loading organizations…</p>
           )}
 
           {!orgLoading && !currentOrg && (
-            <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-8 py-16 text-center">
-              <p className="text-zinc-500">
+            <div className="rounded-xl border border-dashed border-border bg-surface px-8 py-16 text-center">
+              <p className="text-text-muted">
                 You don&apos;t belong to any organization yet.
               </p>
-              <p className="text-sm text-zinc-400 mt-1">
+              <p className="text-sm text-text-subtle mt-1">
                 Create one from the switcher above to get started.
               </p>
             </div>
@@ -103,119 +138,33 @@ export default function DashboardPage() {
 
           {currentOrg && (
             <>
-              <div className="flex items-baseline justify-between mb-6">
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-                    Projects
-                  </h1>
-                  <p className="text-sm text-zinc-500 mt-0.5">
-                    {currentOrg.name}
-                  </p>
-                </div>
+              <DashboardGreeting name={user?.name} orgName={currentOrg.name} />
 
-                {canCreate && !creating && (
-                  <button
-                    onClick={() => setCreating(true)}
-                    className="text-sm font-medium bg-zinc-900 text-white px-3.5 py-2 rounded-lg hover:bg-zinc-800 transition-colors"
-                  >
-                    New project
-                  </button>
-                )}
+              <div className="mb-8">
+                <QuickStats stats={stats} loading={statsLoading} />
               </div>
 
-              {creating && (
-                <form
-                  onSubmit={handleCreateProject}
-                  className="mb-6 flex gap-2 rounded-lg border border-zinc-200 bg-white p-2"
-                >
-                  <input
-                    autoFocus
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Project name"
-                    className="flex-1 px-2 py-1.5 text-sm focus:outline-none"
-                    required
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                  <ActivityFeed organizationId={currentOrg.id} />
+                  <ProjectsSection
+                    org={currentOrg}
+                    onCountChange={(count, hasMore) =>
+                      setProjectStat({ label: "Projects", count, hasMore })
+                    }
                   />
-                  <button
-                    type="submit"
-                    className="text-sm font-medium bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition-colors"
-                  >
-                    Create
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreating(false);
-                      setNewName("");
-                    }}
-                    className="text-sm text-zinc-500 px-2 hover:text-zinc-700"
-                  >
-                    Cancel
-                  </button>
-                </form>
-              )}
-              {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+                </div>
 
-              {projects.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-8 py-16 text-center">
-                  <p className="text-zinc-500">No projects yet.</p>
-                  {canCreate && (
-                    <p className="text-sm text-zinc-400 mt-1">
-                      Create your first project to start tracking issues.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {projects.map((p) => (
-                    <Link
-                      key={p.id}
-                      href={`/dashboard/projects/${p.id}`}
-                      className="group rounded-xl border border-zinc-200 bg-white p-4 hover:border-indigo-200 hover:shadow-sm transition-all"
-                    >
-                      <div className="flex items-start justify-between">
-                        <span className="font-medium text-zinc-900 group-hover:text-indigo-600 transition-colors">
-                          {p.name}
-                        </span>
-                        <svg
-                          className="h-4 w-4 text-zinc-300 group-hover:text-indigo-400 transition-colors"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
-                      </div>
-                      {p.description && (
-                        <p className="text-sm text-zinc-500 mt-1 line-clamp-2">
-                          {p.description}
-                        </p>
-                      )}
-                    </Link>
-                  ))}
-                </div>
-              )}
-
-              {nextCursor && (
-                <div className="mt-6 text-center">
-                  <button
-                    onClick={loadMore}
-                    disabled={loadingMore}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50 transition-colors"
-                  >
-                    {loadingMore ? "Loading…" : "Load more"}
-                  </button>
-                </div>
-              )}
+                {isAdmin && (
+                  <div>
+                    <WorkspaceOverview organizationId={currentOrg.id} />
+                  </div>
+                )}
+              </div>
             </>
           )}
-        </main>
-      </div>
+        </div>
+      </DashboardShell>
     </ProtectedRoute>
   );
 }

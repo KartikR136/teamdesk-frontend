@@ -1,61 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useOrg } from "@/lib/OrgContext";
-import { ProtectedRoute } from "@/lib/ProtectedRoute";
-import { DashboardHeader } from "@/components/DashboardHeader";
-import { RoleBadge } from "@/components/RoleBadge";
+import { useOrg } from "@/providers/OrgProvider";
+import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
+import { DashboardShell } from "@/components/layout/DashboardShell";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { InviteCard } from "@/components/members/InviteCard";
+import { MemberCard } from "@/components/members/MemberCard";
+import { canManageMembers } from "@/lib/permissions";
 import { apiFetch } from "@/lib/api";
-
-type Role = "ADMIN" | "MANAGER" | "MEMBER" | "VIEWER";
-const ROLES: Role[] = ["ADMIN", "MANAGER", "MEMBER", "VIEWER"];
-
-interface Member {
-  userId: string;
-  role: Role;
-  user: { id: string; name: string; email: string };
-}
-
-interface Invitation {
-  id: string;
-  email: string;
-  role: Role;
-  createdAt: string;
-  expiresAt: string;
-}
-
-interface PaginatedResponse<T> {
-  data: T[];
-  hasNextPage: boolean;
-  nextCursor: string | null;
-}
+import { useNotify } from "@/lib/notifications";
+import type { Invitation, Member, PaginatedResponse, Role } from "@/types";
 
 export default function MembersPage() {
   const { currentOrg } = useOrg();
+  const notify = useNotify();
   const [members, setMembers] = useState<Member[]>([]);
   const [membersCursor, setMembersCursor] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const isAdmin = currentOrg?.role === "ADMIN";
-
-  async function loadMembers(orgId: string) {
-    const res: PaginatedResponse<Member> = await apiFetch(
-      `/api/organizations/${orgId}/members`,
-    );
-    setMembers(res.data);
-    setMembersCursor(res.nextCursor);
-  }
-
-  async function loadInvitations(orgId: string) {
-    const res: PaginatedResponse<Invitation> = await apiFetch(
-      `/api/organizations/${orgId}/invitations`,
-    );
-    setInvitations(res.data);
-  }
+  const canManage = canManageMembers(currentOrg?.role);
+  // Only true once a fetch has come back with hasNextPage === false — i.e.
+  // we've actually seen every member, not just assumed the first page was
+  // everything. isLastRemainingAdmin() in lib/permissions.ts refuses to
+  // answer definitively until this is true, by design.
+  const [allMembersLoaded, setAllMembersLoaded] = useState(false);
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -63,14 +36,22 @@ export default function MembersPage() {
     void (async () => {
       setLoading(true);
       try {
-        await Promise.all([
-          loadMembers(currentOrg.id),
-          // Only admins can list pending invitations — skip the call
-          // otherwise so a non-admin doesn't see a console 403.
+        const membersReq = apiFetch<PaginatedResponse<Member>>(
+          `/api/organizations/${currentOrg.id}/members`,
+        ).then((res) => {
+          setMembers(res.data);
+          setMembersCursor(res.nextCursor);
+          setAllMembersLoaded(!res.hasNextPage);
+        });
+
+        const invitationsReq =
           currentOrg.role === "ADMIN"
-            ? loadInvitations(currentOrg.id)
-            : Promise.resolve(),
-        ]);
+            ? apiFetch<PaginatedResponse<Invitation>>(
+                `/api/organizations/${currentOrg.id}/invitations`,
+              ).then((res) => setInvitations(res.data))
+            : Promise.resolve();
+
+        await Promise.all([membersReq, invitationsReq]);
       } finally {
         setLoading(false);
       }
@@ -80,215 +61,127 @@ export default function MembersPage() {
 
   async function loadMoreMembers() {
     if (!currentOrg || !membersCursor) return;
-    const res: PaginatedResponse<Member> = await apiFetch(
-      `/api/organizations/${currentOrg.id}/members?cursor=${encodeURIComponent(membersCursor)}`,
-    );
-    setMembers((prev) => [...prev, ...res.data]);
-    setMembersCursor(res.nextCursor);
+    setLoadingMore(true);
+    try {
+      const res = await apiFetch<PaginatedResponse<Member>>(
+        `/api/organizations/${currentOrg.id}/members?cursor=${encodeURIComponent(membersCursor)}`,
+      );
+      setMembers((prev) => [...prev, ...res.data]);
+      setMembersCursor(res.nextCursor);
+      setAllMembersLoaded(!res.hasNextPage);
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
-  async function handleInvite(e: React.FormEvent) {
-    e.preventDefault();
-    if (!currentOrg) return;
-    setError("");
+  async function handleInvite(email: string, role: Role): Promise<boolean> {
+    if (!currentOrg) return false;
     try {
-      const invitation = await apiFetch(
+      const invitation = await apiFetch<Invitation>(
         `/api/organizations/${currentOrg.id}/invitations`,
-        {
-          method: "POST",
-          body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-        },
+        { method: "POST", body: JSON.stringify({ email, role }) },
       );
       setInvitations((prev) => [invitation, ...prev]);
-      setInviteEmail("");
-      setInviteRole("MEMBER");
+      notify.success("Invitation sent", `${email} will see it when they sign in.`);
+      return true;
     } catch {
-      setError(
-        "Could not send invite — check the email isn't already a member or pending",
+      notify.error(
+        "Could not send invite",
+        "That email may already be a member or have a pending invite.",
       );
+      return false;
     }
   }
 
   async function handleRoleChange(userId: string, role: Role) {
     if (!currentOrg) return;
-    setError("");
     try {
-      const updated = await apiFetch(
+      const updated = await apiFetch<Member>(
         `/api/organizations/${currentOrg.id}/members/${userId}`,
         { method: "PATCH", body: JSON.stringify({ role }) },
       );
       setMembers((prev) =>
-        prev.map((m) =>
-          m.userId === userId ? { ...m, role: updated.role } : m,
-        ),
+        prev.map((m) => (m.userId === userId ? { ...m, role: updated.role } : m)),
       );
+      notify.success("Role updated");
     } catch {
-      setError(
-        "Could not change role — the organization must keep at least one admin",
+      // Backend's own last-admin check — the safety net for the race
+      // condition the frontend can't rule out on a partially loaded list.
+      notify.error(
+        "Could not change role",
+        "The organization must keep at least one admin.",
       );
     }
   }
 
-  async function handleRemove(userId: string) {
-    if (!currentOrg) return;
-    if (!confirm("Remove this member from the organization?")) return;
-    setError("");
+  async function handleRemove(userId: string): Promise<boolean> {
+    if (!currentOrg) return false;
     try {
       await apiFetch(`/api/organizations/${currentOrg.id}/members/${userId}`, {
         method: "DELETE",
       });
       setMembers((prev) => prev.filter((m) => m.userId !== userId));
+      notify.success("Member removed");
+      return true;
     } catch {
-      setError(
-        "Could not remove member — the organization must keep at least one admin",
+      notify.error(
+        "Could not remove member",
+        "The organization must keep at least one admin.",
       );
+      return false;
     }
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-zinc-50">
-        <DashboardHeader />
+      <DashboardShell>
+        <div className="max-w-5xl mx-auto px-6 py-10">
+          <h1 className="text-2xl font-semibold tracking-tight text-text mb-1">Members</h1>
+          <p className="text-sm text-text-muted mb-6">{currentOrg?.name}</p>
 
-        <main className="max-w-5xl mx-auto px-6 py-10">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 mb-1">
-            Members
-          </h1>
-          <p className="text-sm text-zinc-500 mb-6">{currentOrg?.name}</p>
-
-          {error && (
-            <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-
-          {isAdmin && (
-            <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-4">
-              <h2 className="text-sm font-medium text-zinc-900 mb-3">
-                Invite a member
-              </h2>
-              <form onSubmit={handleInvite} className="flex flex-wrap gap-2">
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  className="flex-1 min-w-[200px] border border-zinc-200 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
-                  required
-                />
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as Role)}
-                  className="border border-zinc-200 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="submit"
-                  className="text-sm font-medium bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  Send invite
-                </button>
-              </form>
-
-              {invitations.length > 0 && (
-                <div className="mt-4 border-t border-zinc-100 pt-3">
-                  <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">
-                    Pending invitations
-                  </p>
-                  <ul className="space-y-1.5">
-                    {invitations.map((inv) => (
-                      <li
-                        key={inv.id}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="font-mono text-zinc-600">
-                          {inv.email}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <RoleBadge role={inv.role} />
-                          <span className="text-xs text-zinc-400">
-                            expires{" "}
-                            {new Date(inv.expiresAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+          {canManage && (
+            <div className="mb-8">
+              <InviteCard invitations={invitations} onInvite={handleInvite} />
             </div>
           )}
 
           {loading ? (
-            <p className="text-sm text-zinc-400">Loading members…</p>
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <Card key={i} className="p-4">
+                  <Skeleton className="h-4 w-40 mb-2" />
+                  <Skeleton className="h-3 w-24" />
+                </Card>
+              ))}
+            </div>
           ) : (
-            <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
-              <ul className="divide-y divide-zinc-100">
+            <Card className="overflow-hidden">
+              <ul className="divide-y divide-border">
                 {members.map((m) => (
-                  <li
-                    key={m.userId}
-                    className="flex items-center justify-between px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-zinc-900">
-                        {m.user.name}
-                      </p>
-                      <p className="text-xs text-zinc-400 font-mono">
-                        {m.user.email}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {isAdmin ? (
-                        <select
-                          value={m.role}
-                          onChange={(e) =>
-                            handleRoleChange(m.userId, e.target.value as Role)
-                          }
-                          className="text-xs border border-zinc-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                        >
-                          {ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <RoleBadge role={m.role} />
-                      )}
-
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleRemove(m.userId)}
-                          className="text-xs text-zinc-400 hover:text-red-600 transition-colors"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
+                  <li key={m.userId}>
+                    <MemberCard
+                      member={m}
+                      members={members}
+                      allMembersLoaded={allMembersLoaded}
+                      canManage={canManage}
+                      onRoleChange={handleRoleChange}
+                      onRemove={handleRemove}
+                    />
                   </li>
                 ))}
               </ul>
 
               {membersCursor && (
-                <div className="text-center py-3 border-t border-zinc-100">
-                  <button
-                    onClick={loadMoreMembers}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
-                  >
-                    Load more
-                  </button>
+                <div className="text-center py-3 border-t border-border">
+                  <Button variant="link" onClick={loadMoreMembers} disabled={loadingMore}>
+                    {loadingMore ? "Loading…" : "Load more"}
+                  </Button>
                 </div>
               )}
-            </div>
+            </Card>
           )}
-        </main>
-      </div>
+        </div>
+      </DashboardShell>
     </ProtectedRoute>
   );
 }

@@ -1,4 +1,4 @@
-type Role = "ADMIN" | "MANAGER" | "MEMBER" | "VIEWER";
+import type { Role } from "@/types";
 
 // The signature visual element of this UI: badge weight scales directly
 // with permission rank, so the hierarchy that governs the whole product

@@ -1,6 +1,7 @@
 import "./globals.css";
-import { AuthProvider } from "@/lib/AuthContext";
-import { OrgProvider } from "@/lib/OrgContext";
+import { AuthProvider } from "@/providers/AuthProvider";
+import { OrgProvider } from "@/providers/OrgProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export default function RootLayout({
   children,
@@ -11,7 +12,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider>
-          <OrgProvider>{children}</OrgProvider>
+          <OrgProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </OrgProvider>
         </AuthProvider>
       </body>
     </html>

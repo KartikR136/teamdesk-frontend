@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/providers/AuthProvider";
 
 export default function LoginContent() {
   const { login } = useAuth();

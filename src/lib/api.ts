@@ -25,8 +25,8 @@ async function attemptRefresh(): Promise<boolean> {
 }
 
 // Fired when refresh itself fails — session is genuinely dead.
-// Set by the app shell (see AuthProvider below) so this file doesn't
-// need to know about React Router/Next navigation directly.
+// Set by the app shell (see AuthProvider) so this file doesn't need to
+// know about React Router/Next navigation directly.
 let onSessionExpired: (() => void) | null = null;
 export function registerSessionExpiredHandler(fn: () => void) {
   onSessionExpired = fn;
@@ -40,7 +40,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const doFetch = () =>
     fetch(`${BASE_URL}${path}`, {
       ...options,
@@ -72,8 +75,8 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   // Content-Length can be absent on some responses even with a body, so
   // status code is the more reliable check here.
   if (res.status === 204) {
-    return null;
+    return null as T;
   }
 
-  return res.json();
+  return res.json() as Promise<T>;
 }

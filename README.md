@@ -10,11 +10,14 @@ TeamDesk is not trying to be a Jira or Linear clone. It deliberately ships a nar
 
 ## Live demo
 
-_Add your deployed URL here._
+[https://teamdesk-frontend.vercel.app/]
 
 ## Screenshots
 
-_Add 3–4 screenshots here: Dashboard, Issue Detail, Members page, Activity feed._
+![Dashboard](image.png)
+![Members](image-1.png)
+![Activity feed](image-2.png)
+![Issue Detail](image-3.png)
 
 ---
 
@@ -39,7 +42,7 @@ Every major decision in this codebase — denormalized `organizationId` on every
 - **Cursor-based pagination** throughout, chosen deliberately over offset pagination (see [`ARCHITECTURE.md`](./ARCHITECTURE.md#pagination))
 - **Redis-cached membership roles** with targeted invalidation on the three mutations that actually cause staleness
 
-## What this project is *not* trying to be
+## What this project is _not_ trying to be
 
 Labels, saved filters, notifications, Kanban drag-and-drop, a command palette, dark mode, analytics dashboards — all deliberately out of scope. Every one of these was considered and rejected as breadth-without-depth; see [`ROADMAP.md`](./ROADMAP.md) for the reasoning on each.
 
@@ -87,4 +90,4 @@ Documented in full in [`ARCHITECTURE.md`](./ARCHITECTURE.md#known-trade-offs) an
 
 ## License
 
-_Add your license here._
+MIT — see [LICENSE](./LICENSE).
