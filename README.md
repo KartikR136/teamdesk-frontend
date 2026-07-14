@@ -1,67 +1,90 @@
-# TeamDesk — Frontend
+# TeamDesk
 
-Next.js frontend for TeamDesk, a multi-tenant issue-tracking platform. See the [backend README](https://github.com/YOUR_USERNAME/teamdesk-backend) for full architecture and security model details — this document covers frontend-specific setup and structure.
+A secure, multi-tenant issue-tracking platform built to demonstrate depth on one hard engineering problem — **authorization in a multi-tenant system** — rather than breadth of features.
+
+TeamDesk is not trying to be a Jira or Linear clone. It deliberately ships a narrow feature set (organizations, projects, issues, comments, invitations, role management, activity logging) so that the authorization and multi-tenancy model underneath it can be built correctly, tested against real attack patterns, and explained clearly.
+
+> **The architecture is the product.** Users see issues. Engineers reviewing this repo see the invariant every design decision serves: no organization can ever access another organization's data.
+
+---
+
+## Live demo
+
+_Add your deployed URL here._
+
+## Screenshots
+
+_Add 3–4 screenshots here: Dashboard, Issue Detail, Members page, Activity feed._
+
+---
+
+## Why this project exists
+
+Most portfolio CRUD apps demonstrate that you can wire a frontend to a backend. This one demonstrates something narrower and harder: that you can reason correctly about **who is allowed to see and change what**, in a system where that boundary (organization membership) is the entire security model — not an afterthought bolted on top of a working app.
+
+Every major decision in this codebase — denormalized `organizationId` on every resource, JWTs that carry only identity (roles are loaded fresh per request, never cached in the token), server-side-only org-context derivation — exists to make that one invariant airtight and testable.
 
 ## Tech stack
 
-- Next.js (App Router), TypeScript
-- Tailwind CSS
-- Cookie-based authentication (httpOnly cookies managed entirely by the backend — the frontend never reads or stores tokens directly)
+**Backend**: Express + TypeScript + Prisma + PostgreSQL (Neon), Redis (Upstash) for membership-role caching
+**Frontend**: Next.js (App Router) + TypeScript + Tailwind v4, a small custom design system on shadcn/ui + Radix primitives
+**Deployment**: Render (backend), Vercel (frontend)
 
-## Project structure
+## Core features
 
+- **Multi-tenant organizations** with role-based membership (`VIEWER` < `MEMBER` < `MANAGER` < `ADMIN`)
+- **Projects and issues** with status, priority, and threaded comments
+- **Invitation workflow** — invite by email, accept/reject, with a last-remaining-admin lockout that blocks both demoting and removing an organization's sole admin
+- **Activity feed** — an audit trail of every meaningful mutation, grouped into a readable timeline
+- **Cursor-based pagination** throughout, chosen deliberately over offset pagination (see [`ARCHITECTURE.md`](./ARCHITECTURE.md#pagination))
+- **Redis-cached membership roles** with targeted invalidation on the three mutations that actually cause staleness
+
+## What this project is *not* trying to be
+
+Labels, saved filters, notifications, Kanban drag-and-drop, a command palette, dark mode, analytics dashboards — all deliberately out of scope. Every one of these was considered and rejected as breadth-without-depth; see [`ROADMAP.md`](./ROADMAP.md) for the reasoning on each.
+
+---
+
+## Documentation
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — system design, folder structure, the authorization model, design decisions and trade-offs
+- [`API.md`](./API.md) — backend endpoint reference
+- [`DEPLOYMENT.md`](./DEPLOYMENT.md) — local setup, environment variables, production deployment
+- [`ROADMAP.md`](./ROADMAP.md) — what's deliberately deferred and why
+
+## Quick start
+
+```bash
+# backend
+cd teamdesk-backend
+npm install
+cp .env.example .env      # fill in DATABASE_URL, TEST_DATABASE_URL, REDIS_URL, JWT secrets
+npx prisma migrate deploy
+npm run dev
+
+# frontend
+cd teamdesk-frontend
+npm install
+cp .env.example .env.local   # NEXT_PUBLIC_API_URL
+npm run dev
 ```
-teamdesk-frontend/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   ├── login/
-│   │   │   └── page.tsx
-│   │   ├── signup/
-│   │   │   └── page.tsx
-│   │   └── dashboard/
-│   │       ├── page.tsx
-│   │       └── projects/
-│   │           └── [projectId]/
-│   │               └── page.tsx
-│   ├── components/
-│   │   └── OrgSwitcher.tsx
-│   └── lib/
-│       ├── api.ts
-│       ├── AuthContext.tsx
-│       ├── OrgContext.tsx
-│       └── ProtectedRoute.tsx
-├── .env.local.example
+
+Full environment variable reference in [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+
+## Testing
+
+```bash
+# backend
+npm test
+
+# frontend
+npx tsc --noEmit && npm run lint && npm run build
 ```
 
-## Key design points
+## Known trade-offs
 
-- **`src/lib/api.ts`** is the single shared API client. All authenticated requests go through it. It automatically retries once after a silent token refresh on a 401, using a single-flight guard so concurrent 401s don't trigger duplicate refresh calls (which would otherwise race against refresh token rotation on the backend).
-- **`ProtectedRoute`** is the one place that reacts to a session becoming invalid (expired refresh token, logout, etc.) and redirects to `/login`. Every authenticated page should be wrapped in it.
-- **`OrgContext`** tracks which organization the user is currently "acting in" in the UI. This is purely a UI convenience — it is never used for authorization. All real authorization happens server-side, derived from the authenticated user and the resource being accessed, regardless of what the frontend currently has selected.
-- Role-based UI (e.g., hiding a "Create Project" button from a VIEWER) is UX polish only. The backend enforces the actual permission check independently — removing or bypassing the UI element would not grant access.
+Documented in full in [`ARCHITECTURE.md`](./ARCHITECTURE.md#known-trade-offs) and [`ROADMAP.md`](./ROADMAP.md) — including the deliberate choice not to add CSRF double-submit tokens yet (cookie-based auth + cross-domain `sameSite: "none"` is a named, understood next step for production, not an unaddressed gap), the shared rate-limiter bucket across `/login`/`/signup`/`/refresh`, and the missing `(organizationId, createdAt)` composite index.
 
-## Local development setup
+## License
 
-1. Ensure `teamdesk-backend` is running locally at `http://localhost:4000` (see its README).
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy `.env.local.example` to `.env.local` and set `NEXT_PUBLIC_API_URL` to your backend URL.
-4. Start the dev server:
-   ```bash
-   npm run dev
-   ```
-5. Visit `http://localhost:3000`.
-
-## Environment variables
-
-| Variable              | Description                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_API_URL` | Base URL of the backend API (e.g., `http://localhost:4000` locally, or the deployed Render URL in production) |
-
-## Deployment
-
-Deployed via Vercel. `NEXT_PUBLIC_API_URL` is set in the Vercel project's environment variables to point at the deployed backend, and must match one of the origins allow-listed in the backend's CORS configuration.
+_Add your license here._
