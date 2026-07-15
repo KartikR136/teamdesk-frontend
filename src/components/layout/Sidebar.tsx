@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navigation } from "./navigation";
 import { useOrg } from "@/providers/OrgProvider";
+import { OrgContextPanel } from "./OrgContextPanel";
 
 const STORAGE_KEY = "sidebarCollapsed";
 
@@ -54,6 +55,7 @@ export function Sidebar() {
       )}
     >
       <nav className="flex-1 px-2 py-4 space-y-0.5">
+        <OrgContextPanel collapsed={collapsed} />
         {navigation.map((item) => {
           if (
             item.roles &&

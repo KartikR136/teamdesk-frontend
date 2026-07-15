@@ -1,5 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Users, Mail, Activity, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Mail,
+  Activity,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 import type { Role } from "@/types";
 
 export interface NavItem {
@@ -25,8 +32,20 @@ export const navigation: NavItem[] = [
   { label: "Members", href: "/dashboard/members", icon: Users },
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
+  // Only exists in demo deployments — mirrors the backend's DEMO_MODE gate.
+  // Not a role restriction (no `roles` field): this hides the feature
+  // entirely rather than showing it as disabled, since it isn't a "coming
+  // soon" real feature — it's a demo-only artifact.
+  ...(process.env.NEXT_PUBLIC_DEMO_MODE === "true"
+    ? [{ label: "Security", href: "/dashboard/security", icon: ShieldCheck }]
+    : []),
   // Settings remains a real, named future milestone — not invented scope.
   // Reserving its slot now, disabled, avoids a Sidebar rewrite later
   // without linking anywhere that 404s today.
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, comingSoon: true },
+  {
+    label: "Settings",
+    href: "/dashboard/settings",
+    icon: Settings,
+    comingSoon: true,
+  },
 ];

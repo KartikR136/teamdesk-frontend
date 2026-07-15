@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, FolderPlus, Search } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -25,11 +25,13 @@ function sortProjects(projects: Project[], mode: SortMode): Project[] {
   switch (mode) {
     case "newest":
       return copy.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     case "oldest":
       return copy.sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
     case "az":
       return copy.sort((a, b) => a.name.localeCompare(b.name));
@@ -65,7 +67,6 @@ export function ProjectsSection({
         );
         setProjects(res.data);
         setNextCursor(res.nextCursor);
-        onCountChange?.(res.data.length, res.hasNextPage);
       } catch {
         setProjects([]);
         setNextCursor(null);
@@ -73,8 +74,27 @@ export function ProjectsSection({
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org.id]);
+
+  // Notify the parent whenever the actually-loaded count or hasMore state
+  // changes, rather than calling onCountChange from inside a setState
+  // updater (which happens during this component's render/commit and
+  // triggers React's "setState while rendering a different component"
+  // warning). A ref holds the latest callback so it's never stale without
+  // being a dependency itself — onCountChange is a fresh inline function
+  // from the parent on every render, and including it directly here would
+  // re-run this effect every time the parent re-renders in response to it,
+  // which is exactly the setProjectStat call this effect makes.
+  const onCountChangeRef = useRef(onCountChange);
+  useEffect(() => {
+    onCountChangeRef.current = onCountChange;
+  });
+
+  useEffect(() => {
+    if (!loading) {
+      onCountChangeRef.current?.(projects.length, nextCursor !== null);
+    }
+  }, [projects.length, nextCursor, loading]);
 
   async function loadMore() {
     if (!nextCursor) return;
@@ -83,11 +103,7 @@ export function ProjectsSection({
       const res = await apiFetch<PaginatedResponse<Project>>(
         `/api/organizations/${org.id}/projects?cursor=${encodeURIComponent(nextCursor)}`,
       );
-      setProjects((prev) => {
-        const combined = [...prev, ...res.data];
-        onCountChange?.(combined.length, res.hasNextPage);
-        return combined;
-      });
+      setProjects((prev) => [...prev, ...res.data]);
       setNextCursor(res.nextCursor);
     } finally {
       setLoadingMore(false);
@@ -98,15 +114,14 @@ export function ProjectsSection({
     e.preventDefault();
     setError("");
     try {
-      const project = await apiFetch<Project>(`/api/organizations/${org.id}/projects`, {
-        method: "POST",
-        body: JSON.stringify({ name: newName }),
-      });
-      setProjects((prev) => {
-        const combined = [project, ...prev];
-        onCountChange?.(combined.length, nextCursor !== null);
-        return combined;
-      });
+      const project = await apiFetch<Project>(
+        `/api/organizations/${org.id}/projects`,
+        {
+          method: "POST",
+          body: JSON.stringify({ name: newName }),
+        },
+      );
+      setProjects((prev) => [project, ...prev]);
       setNewName("");
       setCreating(false);
     } catch {
@@ -136,7 +151,7 @@ export function ProjectsSection({
 
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-3">
+      <div className="flex items-baseline justify-between mb-1">
         <h2 className="text-sm font-semibold text-text">Projects</h2>
         {canCreate && !creating && (
           <Button variant="ghost" size="sm" onClick={() => setCreating(true)}>
@@ -144,6 +159,9 @@ export function ProjectsSection({
           </Button>
         )}
       </div>
+      <p className="text-xs text-text-subtle mb-3">
+        Projects belong to the current organization.
+      </p>
 
       {creating && (
         <form onSubmit={handleCreateProject} className="mb-4 flex gap-2">
@@ -217,7 +235,9 @@ export function ProjectsSection({
       ) : projects.length === 0 ? (
         <Card className="border-dashed px-8 py-14 text-center">
           <FolderPlus size={28} className="mx-auto text-text-subtle mb-3" />
-          <p className="text-text-muted">You don&apos;t have any projects yet.</p>
+          <p className="text-text-muted">
+            You don&apos;t have any projects yet.
+          </p>
           <p className="text-sm text-text-subtle mt-1">
             {canCreate
               ? "Create your first project to start tracking issues."
