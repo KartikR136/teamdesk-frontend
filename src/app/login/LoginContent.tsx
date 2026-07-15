@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -60,6 +61,15 @@ export default function LoginContent() {
           Log in
         </button>
       </form>
+
+      <p className="text-center text-sm text-gray-500 mt-6">
+        <Link
+          href="/security"
+          className="underline hover:text-black transition-colors"
+        >
+          How TeamDesk secures your organization&apos;s data
+        </Link>
+      </p>
     </main>
   );
 }

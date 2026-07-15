@@ -21,6 +21,15 @@ TeamDesk is not trying to be a Jira or Linear clone. It deliberately ships a nar
 
 ---
 
+## Proof, not just claims
+
+- **[`THREAT_MODEL.md`](./THREAT_MODEL.md)** — every attack vector this system defends against, the exact mechanism that blocks it, and one honestly-documented discrepancy found while building it (not hidden after the fact).
+- **[`TESTING.md`](./TESTING.md)** — the actual testing methodology, including why a "hostile tenant" (an authenticated user probing another org's boundaries) is treated as a first-class test persona, not an edge case.
+- **A live, public [`/security`](https://teamdesk-frontend.vercel.app/security) overview** — the same threat model and verification story, presented in-product.
+- **An interactive Attack Console** (sign in to reach `/dashboard/security`) — runs the real attack scenarios above against real seeded data, live, and shows you exactly which mechanism blocked each one.
+
+---
+
 ## Why this project exists
 
 Most portfolio CRUD apps demonstrate that you can wire a frontend to a backend. This one demonstrates something narrower and harder: that you can reason correctly about **who is allowed to see and change what**, in a system where that boundary (organization membership) is the entire security model — not an afterthought bolted on top of a working app.
@@ -51,6 +60,8 @@ Labels, saved filters, notifications, Kanban drag-and-drop, a command palette, d
 ## Documentation
 
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — system design, folder structure, the authorization model, design decisions and trade-offs
+- [`THREAT_MODEL.md`](./THREAT_MODEL.md) — every attack vector defended against, the mechanism that blocks it, and the Attack Console that demonstrates it live
+- [`TESTING.md`](./TESTING.md) — testing philosophy and the hostile-tenant methodology, verified against the actual test suite (not assumed)
 - [`API.md`](./API.md) — backend endpoint reference
 - [`DEPLOYMENT.md`](./DEPLOYMENT.md) — local setup, environment variables, production deployment
 - [`ROADMAP.md`](./ROADMAP.md) — what's deliberately deferred and why
