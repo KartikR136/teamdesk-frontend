@@ -29,12 +29,18 @@ export function MobileSidebar() {
 
       <SheetContent side="left">
         <div className="px-4 py-4 border-b border-border">
-          <span className="font-semibold tracking-tight text-text">TeamDesk</span>
+          <span className="font-semibold tracking-tight text-text">
+            TeamDesk
+          </span>
         </div>
 
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           {navigation.map((item) => {
-            if (item.roles && currentOrg && !item.roles.includes(currentOrg.role)) {
+            if (
+              item.roles &&
+              currentOrg &&
+              !item.roles.includes(currentOrg.role)
+            ) {
               return null;
             }
 
@@ -61,10 +67,11 @@ export function MobileSidebar() {
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors duration-fast",
+                  "relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors duration-fast",
+                  "before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:rounded-full before:transition-all before:duration-normal before:ease-standard",
                   active
-                    ? "bg-primary-subtle text-primary-subtle-text"
-                    : "text-text-muted hover:text-text hover:bg-surface-hover",
+                    ? "text-primary-subtle-text before:h-4 before:w-[3px] before:bg-primary before:-left-2"
+                    : "text-text-muted hover:text-text hover:bg-surface-hover before:h-0 before:w-0",
                 )}
               >
                 <Icon size={18} className="shrink-0" />

@@ -40,6 +40,17 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * True when `err` is a fetch abort — i.e. the caller cancelled the
+ * request on purpose (component unmounted, a newer request superseded
+ * it, etc.), not a real failure. Callers should check this before
+ * showing an error toast: an aborted request is not an error the user
+ * needs to see.
+ */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
@@ -51,10 +62,33 @@ export async function apiFetch<T = unknown>(
       headers: { "Content-Type": "application/json", ...options.headers },
     });
 
+  // Signal already aborted before we even started — most likely a
+  // component that fired a request then immediately unmounted (fast
+  // navigation between issues/decisions). Fail fast without a network
+  // call rather than doing work nobody will use.
+  if (options.signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+
   let res = await doFetch();
 
   if (res.status === 401 && !path.startsWith("/api/auth/")) {
+    // If the caller cancelled while we were in flight, don't spend a
+    // refresh + retry cycle on a request nobody's waiting for anymore —
+    // this is the actual race-condition fix: previously a stale request
+    // (e.g. from an issue page the user already navigated away from)
+    // could still trigger attemptRefresh() and a second fetch, whose
+    // eventual response could arrive after and overwrite state set by a
+    // newer, still-relevant request.
+    if (options.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
     const refreshed = await attemptRefresh();
+
+    if (options.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
 
     if (!refreshed) {
       onSessionExpired?.();

@@ -3,7 +3,7 @@ import LoginContent from "./LoginContent";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<p className="text-center mt-20">Loading...</p>}>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
       <LoginContent />
     </Suspense>
   );

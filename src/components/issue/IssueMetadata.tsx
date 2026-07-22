@@ -3,7 +3,10 @@ import { Avatar } from "@/components/ui/Avatar";
 import { IssueStatusControl } from "./IssueStatus";
 import type { IssuePriority, IssueStatus } from "@/types";
 
-const PRIORITY_VARIANT: Record<IssuePriority, "neutral" | "warning" | "danger"> = {
+const PRIORITY_VARIANT: Record<
+  IssuePriority,
+  "neutral" | "warning" | "danger"
+> = {
   LOW: "neutral",
   MEDIUM: "neutral",
   HIGH: "warning",
@@ -45,9 +48,11 @@ export function IssueMetadata({
   updatedAt: string;
 }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-5 text-sm">
       <div>
-        <p className="text-xs text-text-subtle mb-1.5">Status</p>
+        <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
+          Status
+        </p>
         <IssueStatusControl
           status={status}
           onChange={onStatusChange}
@@ -56,12 +61,18 @@ export function IssueMetadata({
       </div>
 
       <div>
-        <p className="text-xs text-text-subtle mb-1.5">Priority</p>
-        <Badge variant={PRIORITY_VARIANT[priority]}>{PRIORITY_LABEL[priority]}</Badge>
+        <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
+          Priority
+        </p>
+        <Badge variant={PRIORITY_VARIANT[priority]}>
+          {PRIORITY_LABEL[priority]}
+        </Badge>
       </div>
 
       <div>
-        <p className="text-xs text-text-subtle mb-1.5">Assignee</p>
+        <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
+          Assignee
+        </p>
         {assignee ? (
           <div className="flex items-center gap-1.5">
             <Avatar name={assignee.name} size="sm" tone="subtle" />
@@ -73,7 +84,9 @@ export function IssueMetadata({
       </div>
 
       <div>
-        <p className="text-xs text-text-subtle mb-1.5">Created by</p>
+        <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
+          Created by
+        </p>
         <div className="flex items-center gap-1.5">
           <Avatar name={creator.name} size="sm" tone="subtle" />
           <span className="text-text">{creator.name}</span>
@@ -81,12 +94,16 @@ export function IssueMetadata({
       </div>
 
       <div>
-        <p className="text-xs text-text-subtle mb-1.5">Created</p>
+        <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
+          Created
+        </p>
         <span className="text-text-muted">{formatDate(createdAt)}</span>
       </div>
 
       <div>
-        <p className="text-xs text-text-subtle mb-1.5">Updated</p>
+        <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
+          Updated
+        </p>
         <span className="text-text-muted">{formatDate(updatedAt)}</span>
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   Activity,
   Settings,
   ShieldCheck,
+  ScrollText,
 } from "lucide-react";
 import type { Role } from "@/types";
 
@@ -32,6 +33,7 @@ export const navigation: NavItem[] = [
   { label: "Members", href: "/dashboard/members", icon: Users },
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
+  { label: "Decisions", href: "/dashboard/decisions", icon: ScrollText },
   // Only exists in demo deployments — mirrors the backend's DEMO_MODE gate.
   // Not a role restriction (no `roles` field): this hides the feature
   // entirely rather than showing it as disabled, since it isn't a "coming

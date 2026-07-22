@@ -18,7 +18,10 @@ import {
 } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { RoleSelector } from "./RoleSelector";
-import { isLastRemainingAdmin, getLastAdminBlockReason } from "@/lib/permissions";
+import {
+  isLastRemainingAdmin,
+  getLastAdminBlockReason,
+} from "@/lib/permissions";
 import type { Member, Role } from "@/types";
 
 export function MemberCard({
@@ -28,6 +31,7 @@ export function MemberCard({
   canManage,
   onRoleChange,
   onRemove,
+  index = 0,
 }: {
   member: Member;
   /** Full current member list — needed to compute admin count. Passed
@@ -37,6 +41,7 @@ export function MemberCard({
   canManage: boolean;
   onRoleChange: (userId: string, role: Role) => Promise<void>;
   onRemove: (userId: string) => Promise<boolean>;
+  index?: number;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -44,8 +49,16 @@ export function MemberCard({
   // null = "unknown, not all members loaded yet" — in that case we don't
   // pre-disable; the backend's own check remains the safety net for the
   // race. true/false only render once the full list is confirmed loaded.
-  const isLastAdmin = isLastRemainingAdmin(members, allMembersLoaded, member.userId);
-  const blockReason = getLastAdminBlockReason(members, allMembersLoaded, member.userId);
+  const isLastAdmin = isLastRemainingAdmin(
+    members,
+    allMembersLoaded,
+    member.userId,
+  );
+  const blockReason = getLastAdminBlockReason(
+    members,
+    allMembersLoaded,
+    member.userId,
+  );
 
   async function handleConfirmRemove() {
     setRemoving(true);
@@ -58,12 +71,19 @@ export function MemberCard({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3">
+    <div
+      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 hover:bg-surface-hover/60 transition-colors duration-fast animate-in fade-in fill-mode-backwards duration-normal ease-standard"
+      style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }}
+    >
       <div className="flex items-center gap-3 min-w-0">
         <Avatar name={member.user.name} size="lg" tone="subtle" />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-text truncate">{member.user.name}</p>
-          <p className="text-xs text-text-subtle font-mono truncate">{member.user.email}</p>
+          <p className="text-sm font-medium text-text truncate">
+            {member.user.name}
+          </p>
+          <p className="text-xs text-text-subtle font-mono truncate">
+            {member.user.email}
+          </p>
         </div>
       </div>
 
@@ -92,7 +112,9 @@ export function MemberCard({
                 disabled={isLastAdmin === true}
                 title={isLastAdmin === true ? blockReason : undefined}
                 onSelect={() => setConfirmOpen(true)}
-                className={isLastAdmin === true ? "text-text-subtle" : "text-danger"}
+                className={
+                  isLastAdmin === true ? "text-text-subtle" : "text-danger"
+                }
               >
                 Remove from organization
               </DropdownItem>
@@ -105,13 +127,23 @@ export function MemberCard({
         <DialogContent>
           <DialogTitle>Remove {member.user.name}?</DialogTitle>
           <DialogDescription>
-            They&apos;ll lose access to this organization immediately. This can&apos;t be undone.
+            They&apos;ll lose access to this organization immediately. This
+            can&apos;t be undone.
           </DialogDescription>
           <DialogFooter>
-            <Button variant="secondary" size="sm" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmOpen(false)}
+            >
               Cancel
             </Button>
-            <Button variant="danger" size="sm" onClick={handleConfirmRemove} disabled={removing}>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmRemove}
+              disabled={removing}
+            >
               {removing ? "Removing…" : "Remove"}
             </Button>
           </DialogFooter>

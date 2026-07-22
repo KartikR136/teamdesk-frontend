@@ -9,15 +9,15 @@ export function IssueHeader({
   projectId: string;
 }) {
   return (
-    <div className="mb-5">
+    <div className="mb-6">
       <Link
         href={`/dashboard/projects/${projectId}`}
-        className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-text transition-colors"
+        className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-text transition-colors mb-3"
       >
         <ChevronLeft size={14} />
         Back to project
       </Link>
-      <h1 className="text-xl font-semibold tracking-tight text-text mt-2">
+      <h1 className="text-2xl font-semibold tracking-tight text-text leading-snug">
         {title}
       </h1>
     </div>

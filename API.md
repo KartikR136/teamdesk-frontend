@@ -8,41 +8,43 @@ All endpoints require authentication via httpOnly session cookie unless noted. A
 
 ---
 
-## Authentication 📄
+## Authentication ✅
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/auth/signup` | Create account, sets session cookie |
-| POST | `/api/auth/login` | Authenticate, sets session cookie |
-| POST | `/api/auth/logout` | Clear session |
-| POST | `/api/auth/refresh` | Rotate refresh token |
-| GET | `/api/auth/me` | Current authenticated user |
+| Method | Path                        | Description                                                                                                                                                                                                                                                                          |
+| ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/api/auth/signup`          | Create account, sets session cookie                                                                                                                                                                                                                                                  |
+| POST   | `/api/auth/login`           | Authenticate, sets session cookie                                                                                                                                                                                                                                                    |
+| POST   | `/api/auth/logout`          | Clear session                                                                                                                                                                                                                                                                        |
+| POST   | `/api/auth/refresh`         | Rotate refresh token                                                                                                                                                                                                                                                                 |
+| GET    | `/api/auth/me`              | Current authenticated user                                                                                                                                                                                                                                                           |
+| POST   | `/api/auth/forgot-password` | Request a password reset link. Always returns `{ message }` with an identical generic response whether or not the email matches a real account — never reveals account existence. Rate-limited separately from other auth endpoints (`passwordResetLimiter`, 5/hour/IP).             |
+| POST   | `/api/auth/reset-password`  | Consume a reset token (`{ token, newPassword }`), set a new password, and revoke every existing session (`RefreshToken`) for that user. Token is single-use and expires after 45 minutes; failure is always a generic "invalid or expired" message regardless of the specific cause. |
 
 ## Organizations 📄
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/organizations` | any member | List orgs the current user belongs to |
-| POST | `/api/organizations` | authenticated | Create a new organization (creator becomes ADMIN) |
+| Method | Path                 | Auth          | Description                                       |
+| ------ | -------------------- | ------------- | ------------------------------------------------- |
+| GET    | `/api/organizations` | any member    | List orgs the current user belongs to             |
+| POST   | `/api/organizations` | authenticated | Create a new organization (creator becomes ADMIN) |
 
 ## Projects ✅
 
-| Method | Path | Role | Description |
-|---|---|---|---|
-| GET | `/api/organizations/:organizationId/projects` | VIEWER+ | Paginated project list |
-| POST | `/api/organizations/:organizationId/projects` | MEMBER+ | Create project |
+| Method | Path                                          | Role    | Description            |
+| ------ | --------------------------------------------- | ------- | ---------------------- |
+| GET    | `/api/organizations/:organizationId/projects` | VIEWER+ | Paginated project list |
+| POST   | `/api/organizations/:organizationId/projects` | MEMBER+ | Create project         |
 
 **Project shape**: `{ id, name, description, createdAt, organizationId }`
 
 ## Issues ✅
 
-| Method | Path | Role | Description |
-|---|---|---|---|
-| GET | `/api/organizations/:organizationId/issues` | VIEWER+ | Org-wide paginated issue list |
-| GET | `/api/organizations/:organizationId/projects/:projectId/issues` | VIEWER+ | Project-scoped paginated issue list |
-| GET | `/api/issues/:issueId` | VIEWER+ | Single issue **with comments included** — added in this project's Milestone 7 specifically to support a dedicated issue detail page (see [`ARCHITECTURE.md`](./ARCHITECTURE.md)) |
-| POST | `/api/organizations/:organizationId/issues` | MEMBER+ | Create issue |
-| PATCH | `/api/issues/:issueId` | MEMBER+ | Update issue (title/description/status/assigneeId — any subset) |
+| Method | Path                                                            | Role    | Description                                                                                                                                                                      |
+| ------ | --------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/organizations/:organizationId/issues`                     | VIEWER+ | Org-wide paginated issue list                                                                                                                                                    |
+| GET    | `/api/organizations/:organizationId/projects/:projectId/issues` | VIEWER+ | Project-scoped paginated issue list                                                                                                                                              |
+| GET    | `/api/issues/:issueId`                                          | VIEWER+ | Single issue **with comments included** — added in this project's Milestone 7 specifically to support a dedicated issue detail page (see [`ARCHITECTURE.md`](./ARCHITECTURE.md)) |
+| POST   | `/api/organizations/:organizationId/issues`                     | MEMBER+ | Create issue                                                                                                                                                                     |
+| PATCH  | `/api/issues/:issueId`                                          | MEMBER+ | Update issue (title/description/status/assigneeId — any subset)                                                                                                                  |
 
 **Issue shape** (from `GET /api/issues/:issueId`): `{ id, title, description, status, priority, projectId, creator: {id, name}, assignee: {id, name} | null, createdAt, updatedAt, comments: Comment[] }`
 
@@ -51,40 +53,63 @@ All endpoints require authentication via httpOnly session cookie unless noted. A
 
 ## Comments 📄
 
-| Method | Path | Role | Description |
-|---|---|---|---|
-| GET | `/api/issues/:issueId/comments` | VIEWER+ | Paginated comments for an issue |
-| POST | `/api/issues/:issueId/comments` | MEMBER+ | Add comment |
-| PATCH | `/api/comments/:commentId` | author or ADMIN | Edit comment |
-| DELETE | `/api/comments/:commentId` | author or ADMIN | Delete comment (204 No Content) |
+| Method | Path                            | Role            | Description                     |
+| ------ | ------------------------------- | --------------- | ------------------------------- |
+| GET    | `/api/issues/:issueId/comments` | VIEWER+         | Paginated comments for an issue |
+| POST   | `/api/issues/:issueId/comments` | MEMBER+         | Add comment                     |
+| PATCH  | `/api/comments/:commentId`      | author or ADMIN | Edit comment                    |
+| DELETE | `/api/comments/:commentId`      | author or ADMIN | Delete comment (204 No Content) |
 
 ## Activity ✅
 
-| Method | Path | Role | Description |
-|---|---|---|---|
-| GET | `/api/organizations/:organizationId/activity` | VIEWER+ | Paginated activity feed |
+| Method | Path                                          | Role    | Description             |
+| ------ | --------------------------------------------- | ------- | ----------------------- |
+| GET    | `/api/organizations/:organizationId/activity` | VIEWER+ | Paginated activity feed |
 
 **ActivityLog shape** (confirmed fields only): `{ id, action, createdAt, user: {id, name} }` — additional fields may exist on the model beyond what's confirmed here; see the honesty note in `types/index.ts`'s `ActivityEntry` type.
 
-`action` enum: `ORGANIZATION_CREATED | PROJECT_CREATED | ISSUE_CREATED | ISSUE_UPDATED | COMMENT_CREATED | COMMENT_EDITED | COMMENT_DELETED | MEMBER_INVITED | MEMBER_JOINED | MEMBER_ROLE_CHANGED | MEMBER_REMOVED`
+`action` enum: `ORGANIZATION_CREATED | PROJECT_CREATED | ISSUE_CREATED | ISSUE_UPDATED | COMMENT_CREATED | COMMENT_EDITED | COMMENT_DELETED | MEMBER_INVITED | MEMBER_JOINED | MEMBER_ROLE_CHANGED | MEMBER_REMOVED | DECISION_CREATED | DECISION_UPDATED | DECISION_STATUS_CHANGED | DECISION_DELETED`
 
 ## Members 📄
 
-| Method | Path | Role | Description |
-|---|---|---|---|
-| GET | `/api/organizations/:organizationId/members` | VIEWER+ | Paginated member list |
-| PATCH | `/api/organizations/:organizationId/members/:userId` | ADMIN | Change a member's role (blocked if target is the sole remaining admin) |
-| DELETE | `/api/organizations/:organizationId/members/:userId` | ADMIN | Remove a member (same last-admin lockout) |
+| Method | Path                                                 | Role    | Description                                                            |
+| ------ | ---------------------------------------------------- | ------- | ---------------------------------------------------------------------- |
+| GET    | `/api/organizations/:organizationId/members`         | VIEWER+ | Paginated member list                                                  |
+| PATCH  | `/api/organizations/:organizationId/members/:userId` | ADMIN   | Change a member's role (blocked if target is the sole remaining admin) |
+| DELETE | `/api/organizations/:organizationId/members/:userId` | ADMIN   | Remove a member (same last-admin lockout)                              |
 
 ## Invitations 📄
 
-| Method | Path | Role | Description |
-|---|---|---|---|
-| GET | `/api/organizations/:organizationId/invitations` | ADMIN | Pending invitations for the org |
-| POST | `/api/organizations/:organizationId/invitations` | ADMIN | Invite by email + role |
-| GET | `/api/invitations/me` | authenticated | Invitations addressed to the current user's email |
-| POST | `/api/invitations/:invitationId/accept` | authenticated (matching email) | Accept, joins the org |
-| POST | `/api/invitations/:invitationId/reject` | authenticated (matching email) | Decline |
+| Method | Path                                             | Role                           | Description                                       |
+| ------ | ------------------------------------------------ | ------------------------------ | ------------------------------------------------- |
+| GET    | `/api/organizations/:organizationId/invitations` | ADMIN                          | Pending invitations for the org                   |
+| POST   | `/api/organizations/:organizationId/invitations` | ADMIN                          | Invite by email + role                            |
+| GET    | `/api/invitations/me`                            | authenticated                  | Invitations addressed to the current user's email |
+| POST   | `/api/invitations/:invitationId/accept`          | authenticated (matching email) | Accept, joins the org                             |
+| POST   | `/api/invitations/:invitationId/reject`          | authenticated (matching email) | Decline                                           |
+
+## Decisions ✅
+
+Confirmed directly against `src/routes/decisions.ts` and covered by `src/test/decisions.test.ts` (added in this milestone). TeamDesk's Decision Log — a first-class, organization-scoped resource for recording engineering decisions with their context, alternatives, and trade-offs, following the exact same architectural pattern as every other resource in this API (denormalized `organizationId`, server-side org resolution, RBAC, activity logging).
+
+| Method | Path                                           | Role            | Description                                                                |
+| ------ | ---------------------------------------------- | --------------- | -------------------------------------------------------------------------- |
+| GET    | `/api/organizations/:organizationId/decisions` | VIEWER+         | Paginated decision list, optionally filtered by `?status=`                 |
+| POST   | `/api/organizations/:organizationId/decisions` | MEMBER+         | Create a decision                                                          |
+| GET    | `/api/decisions/:decisionId`                   | VIEWER+         | Single decision, with author, related project, and related issues included |
+| PATCH  | `/api/decisions/:decisionId`                   | author or ADMIN | Edit any subset of fields                                                  |
+| PATCH  | `/api/decisions/:decisionId/status`            | author or ADMIN | Change status — a distinct, audit-worthy action from a general edit        |
+| DELETE | `/api/decisions/:decisionId`                   | author or ADMIN | Delete decision (204 No Content)                                           |
+
+**Decision shape**: `{ id, title, problemStatement, context, alternatives, chosenSolution, tradeoffs, consequences: string | null, status, projectId: string | null, reviewDate: string | null, organizationId, authorId, createdAt, author: {id, name}, project: {id, name} | null, relatedIssues: { issue: { id, title, status } }[] }`
+
+`status`: `"DRAFT" | "ACCEPTED" | "SUPERSEDED" | "ARCHIVED"`
+
+**Field length limits** (enforced server-side via Zod, matching the reasoning already applied to `Comment.body`): `title` max 200 chars; `problemStatement`, `context`, `alternatives`, `chosenSolution`, `tradeoffs`, `consequences` max 5000 chars each; `relatedIssueIds` max 50 entries per decision.
+
+**Cross-tenant defense-in-depth**: creating or updating a decision with a `projectId` or `relatedIssueIds` re-verifies each referenced resource actually belongs to the same organization as the decision — the identical pattern `POST /organizations/:organizationId/issues` already uses for a client-supplied `projectId`. A cross-org reference is rejected with 404, not silently ignored or trusted.
+
+**Ownership rule**: identical to Comments — the decision's author or an org ADMIN can edit, change status, or delete it. Any other member (including one with a real membership in the same org) receives 403.
 
 ---
 
@@ -92,15 +117,18 @@ All endpoints require authentication via httpOnly session cookie unless noted. A
 
 Every list endpoint accepts:
 
-| Query param | Type | Description |
-|---|---|---|
-| `cursor` | string (opaque, base64) | From a previous response's `nextCursor` |
-| `limit` | number | Page size |
+| Query param | Type                    | Description                             |
+| ----------- | ----------------------- | --------------------------------------- |
+| `cursor`    | string (opaque, base64) | From a previous response's `nextCursor` |
+| `limit`     | number                  | Page size                               |
 
 Response shape:
+
 ```json
 {
-  "data": [ /* array of resources */ ],
+  "data": [
+    /* array of resources */
+  ],
   "hasNextPage": true,
   "nextCursor": "opaque-string-or-null"
 }
@@ -112,10 +140,10 @@ There is no offset/page-number pagination and no server-side search across pagin
 
 Standard shape: `{ "error": "message" | { /* zod flatten() validation errors */ } }`
 
-| Status | Meaning |
-|---|---|
-| 400 | Validation failure or invalid cursor |
-| 401 | Not authenticated / session expired |
-| 403 | Authenticated but insufficient role |
-| 404 | Resource not found, or not found *for this org* (multi-tenant isolation returns 404, not 403, to avoid confirming a resource exists in another org) |
-| 204 | Success, no body (DELETE endpoints) |
+| Status | Meaning                                                                                                                                             |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | Validation failure or invalid cursor                                                                                                                |
+| 401    | Not authenticated / session expired                                                                                                                 |
+| 403    | Authenticated but insufficient role                                                                                                                 |
+| 404    | Resource not found, or not found _for this org_ (multi-tenant isolation returns 404, not 403, to avoid confirming a resource exists in another org) |
+| 204    | Success, no body (DELETE endpoints)                                                                                                                 |

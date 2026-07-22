@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Users } from "lucide-react";
 import { useOrg } from "@/providers/OrgProvider";
 import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState, EmptyStateCard } from "@/components/ui/EmptyState";
+import { Avatar } from "@/components/ui/Avatar";
+import { RoleBadge } from "@/components/RoleBadge";
 import { InviteCard } from "@/components/members/InviteCard";
 import { MemberCard } from "@/components/members/MemberCard";
 import { canManageMembers } from "@/lib/permissions";
@@ -22,56 +26,43 @@ export default function MembersPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [allMembersLoaded, setAllMembersLoaded] = useState(false);
 
   const canManage = canManageMembers(currentOrg?.role);
-  // Only true once a fetch has come back with hasNextPage === false — i.e.
-  // we've actually seen every member, not just assumed the first page was
-  // everything. isLastRemainingAdmin() in lib/permissions.ts refuses to
-  // answer definitively until this is true, by design.
-  const [allMembersLoaded, setAllMembersLoaded] = useState(false);
 
   useEffect(() => {
     if (!currentOrg) return;
+    setLoading(true);
+    const membersReq = apiFetch<PaginatedResponse<Member>>(
+      `/api/organizations/${currentOrg.id}/members`,
+    ).then((res) => {
+      setMembers(res.data);
+      setMembersCursor(res.nextCursor);
+      setAllMembersLoaded(!res.hasNextPage);
+    });
 
-    void (async () => {
-      setLoading(true);
-      try {
-        const membersReq = apiFetch<PaginatedResponse<Member>>(
-          `/api/organizations/${currentOrg.id}/members`,
-        ).then((res) => {
-          setMembers(res.data);
-          setMembersCursor(res.nextCursor);
-          setAllMembersLoaded(!res.hasNextPage);
-        });
+    const invitationsReq = currentOrg.role === "ADMIN"
+      ? apiFetch<PaginatedResponse<Invitation>>(
+          `/api/organizations/${currentOrg.id}/invitations`,
+        ).then((res) => setInvitations(res.data))
+      : Promise.resolve();
 
-        const invitationsReq =
-          currentOrg.role === "ADMIN"
-            ? apiFetch<PaginatedResponse<Invitation>>(
-                `/api/organizations/${currentOrg.id}/invitations`,
-              ).then((res) => setInvitations(res.data))
-            : Promise.resolve();
-
-        await Promise.all([membersReq, invitationsReq]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    Promise.all([membersReq, invitationsReq]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrg?.id, currentOrg?.role]);
 
   async function loadMoreMembers() {
     if (!currentOrg || !membersCursor) return;
     setLoadingMore(true);
-    try {
-      const res = await apiFetch<PaginatedResponse<Member>>(
-        `/api/organizations/${currentOrg.id}/members?cursor=${encodeURIComponent(membersCursor)}`,
-      );
-      setMembers((prev) => [...prev, ...res.data]);
-      setMembersCursor(res.nextCursor);
-      setAllMembersLoaded(!res.hasNextPage);
-    } finally {
-      setLoadingMore(false);
-    }
+    apiFetch<PaginatedResponse<Member>>(
+      `/api/organizations/${currentOrg.id}/members?cursor=${encodeURIComponent(membersCursor)}`,
+    )
+      .then((res) => {
+        setMembers((prev) => [...prev, ...res.data]);
+        setMembersCursor(res.nextCursor);
+        setAllMembersLoaded(!res.hasNextPage);
+      })
+      .finally(() => setLoadingMore(false));
   }
 
   async function handleInvite(email: string, role: Role): Promise<boolean> {
@@ -85,10 +76,7 @@ export default function MembersPage() {
       notify.success("Invitation sent", `${email} will see it when they sign in.`);
       return true;
     } catch {
-      notify.error(
-        "Could not send invite",
-        "That email may already be a member or have a pending invite.",
-      );
+      notify.error("Could not send invite", "That email may already be a member or have a pending invite.");
       return false;
     }
   }
@@ -100,34 +88,22 @@ export default function MembersPage() {
         `/api/organizations/${currentOrg.id}/members/${userId}`,
         { method: "PATCH", body: JSON.stringify({ role }) },
       );
-      setMembers((prev) =>
-        prev.map((m) => (m.userId === userId ? { ...m, role: updated.role } : m)),
-      );
+      setMembers((prev) => prev.map((m) => m.userId === userId ? { ...m, role: updated.role } : m));
       notify.success("Role updated");
     } catch {
-      // Backend's own last-admin check — the safety net for the race
-      // condition the frontend can't rule out on a partially loaded list.
-      notify.error(
-        "Could not change role",
-        "The organization must keep at least one admin.",
-      );
+      notify.error("Could not change role", "The organization must keep at least one admin.");
     }
   }
 
   async function handleRemove(userId: string): Promise<boolean> {
     if (!currentOrg) return false;
     try {
-      await apiFetch(`/api/organizations/${currentOrg.id}/members/${userId}`, {
-        method: "DELETE",
-      });
+      await apiFetch(`/api/organizations/${currentOrg.id}/members/${userId}`, { method: "DELETE" });
       setMembers((prev) => prev.filter((m) => m.userId !== userId));
       notify.success("Member removed");
       return true;
     } catch {
-      notify.error(
-        "Could not remove member",
-        "The organization must keep at least one admin.",
-      );
+      notify.error("Could not remove member", "The organization must keep at least one admin.");
       return false;
     }
   }
@@ -135,30 +111,55 @@ export default function MembersPage() {
   return (
     <ProtectedRoute>
       <DashboardShell>
-        <div className="max-w-5xl mx-auto px-6 py-10">
-          <h1 className="text-2xl font-semibold tracking-tight text-text mb-1">Members</h1>
-          <p className="text-sm text-text-muted mb-6">{currentOrg?.name}</p>
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-xl font-semibold tracking-tight text-text">Members</h1>
+            <p className="text-sm text-text-muted mt-0.5">{currentOrg?.name}</p>
+          </div>
 
+          {/* Invite panel (admin only) */}
           {canManage && (
-            <div className="mb-8">
+            <div className="mb-7">
               <InviteCard invitations={invitations} onInvite={handleInvite} />
             </div>
           )}
 
+          {/* Member list */}
           {loading ? (
-            <div className="space-y-2">
-              {[0, 1, 2].map((i) => (
-                <Card key={i} className="p-4">
-                  <Skeleton className="h-4 w-40 mb-2" />
-                  <Skeleton className="h-3 w-24" />
-                </Card>
+            <div className="rounded-xl border border-border bg-surface overflow-hidden divide-y divide-border">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <Skeleton className="h-9 w-9 rounded-full" round />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-32 mb-1.5" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded-pill" />
+                </div>
               ))}
             </div>
+          ) : members.length === 0 ? (
+            <EmptyStateCard>
+              <EmptyState icon={<Users size={30} />} title="No members yet" description="Invite your teammates to get started." />
+            </EmptyStateCard>
           ) : (
-            <Card className="overflow-hidden">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+              <div className="px-5 py-3 border-b border-border bg-background-subtle">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-4 text-xs font-semibold uppercase tracking-wider text-text-subtle">
+                  <span>Member</span>
+                  <span>Role</span>
+                  {canManage && <span />}
+                </div>
+              </div>
               <ul className="divide-y divide-border">
-                {members.map((m) => (
-                  <li key={m.userId}>
+                {members.map((m, i) => (
+                  <motion.li
+                    key={m.userId}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.04, duration: 0.25 }}
+                  >
                     <MemberCard
                       member={m}
                       members={members}
@@ -166,11 +167,11 @@ export default function MembersPage() {
                       canManage={canManage}
                       onRoleChange={handleRoleChange}
                       onRemove={handleRemove}
+                      index={i}
                     />
-                  </li>
+                  </motion.li>
                 ))}
               </ul>
-
               {membersCursor && (
                 <div className="text-center py-3 border-t border-border">
                   <Button variant="link" onClick={loadMoreMembers} disabled={loadingMore}>
@@ -178,7 +179,7 @@ export default function MembersPage() {
                   </Button>
                 </div>
               )}
-            </Card>
+            </div>
           )}
         </div>
       </DashboardShell>

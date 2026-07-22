@@ -14,7 +14,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
-  if (loading) return <p className="p-8">Loading...</p>;
+  if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return null; // avoid flashing protected content during redirect
 
   return <>{children}</>;

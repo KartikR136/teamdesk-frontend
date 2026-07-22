@@ -7,7 +7,7 @@ import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { useAuth } from "@/providers/AuthProvider";
 import { useOrg } from "@/providers/OrgProvider";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, ApiError, isAbortError } from "@/lib/api";
 import { useNotify } from "@/lib/notifications";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -18,7 +18,10 @@ import { IssueComments } from "@/components/issue/IssueComments";
 import type { Comment, IssueDetail, IssueStatus } from "@/types";
 
 export default function IssueDetailPage() {
-  const { projectId, issueId } = useParams<{ projectId: string; issueId: string }>();
+  const { projectId, issueId } = useParams<{
+    projectId: string;
+    issueId: string;
+  }>();
   const { user } = useAuth();
   const { currentOrg } = useOrg();
   const notify = useNotify();
@@ -28,21 +31,33 @@ export default function IssueDetailPage() {
   // Distinguish "genuinely doesn't exist / no access" (404/403) from any
   // other failure (network blip, 500) — these deserve different messages
   // and a generic failure should offer retry, not imply the issue is gone.
-  const [loadError, setLoadError] = useState<"not_found" | "other" | null>(null);
+  const [loadError, setLoadError] = useState<"not_found" | "other" | null>(
+    null,
+  );
   const [statusUpdating, setStatusUpdating] = useState(false);
 
   useEffect(() => {
-    void loadIssue();
+    const controller = new AbortController();
+    void loadIssue(controller.signal);
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issueId]);
 
-  async function loadIssue() {
+  async function loadIssue(signal?: AbortSignal) {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await apiFetch<IssueDetail>(`/api/issues/${issueId}`);
+      const data = await apiFetch<IssueDetail>(`/api/issues/${issueId}`, {
+        signal,
+      });
       setIssue(data);
     } catch (err) {
+      // A superseded request (component unmounted, or issueId changed
+      // again before this one resolved) isn't a real failure — just
+      // stop quietly. Setting loading/error state here would be wrong
+      // anyway: this request's issueId is no longer the one on screen.
+      if (isAbortError(err)) return;
+
       // Never swallow silently — this is exactly the kind of failure
       // (e.g. a backend route that wasn't deployed) that's invisible
       // without a console trace.
@@ -53,7 +68,7 @@ export default function IssueDetailPage() {
         setLoadError("other");
       }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }
 
@@ -86,11 +101,16 @@ export default function IssueDetailPage() {
 
   async function handleAddComment(body: string): Promise<boolean> {
     try {
-      const comment = await apiFetch<Comment>(`/api/issues/${issueId}/comments`, {
-        method: "POST",
-        body: JSON.stringify({ body }),
-      });
-      setIssue((prev) => (prev ? { ...prev, comments: [comment, ...prev.comments] } : prev));
+      const comment = await apiFetch<Comment>(
+        `/api/issues/${issueId}/comments`,
+        {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        },
+      );
+      setIssue((prev) =>
+        prev ? { ...prev, comments: [comment, ...prev.comments] } : prev,
+      );
       notify.success("Comment posted");
       return true;
     } catch (err) {
@@ -100,7 +120,10 @@ export default function IssueDetailPage() {
     }
   }
 
-  async function handleEditComment(commentId: string, body: string): Promise<boolean> {
+  async function handleEditComment(
+    commentId: string,
+    body: string,
+  ): Promise<boolean> {
     try {
       const updated = await apiFetch<Comment>(`/api/comments/${commentId}`, {
         method: "PATCH",
@@ -110,7 +133,9 @@ export default function IssueDetailPage() {
         prev
           ? {
               ...prev,
-              comments: prev.comments.map((c) => (c.id === commentId ? updated : c)),
+              comments: prev.comments.map((c) =>
+                c.id === commentId ? updated : c,
+              ),
             }
           : prev,
       );
@@ -128,7 +153,10 @@ export default function IssueDetailPage() {
       await apiFetch(`/api/comments/${commentId}`, { method: "DELETE" });
       setIssue((prev) =>
         prev
-          ? { ...prev, comments: prev.comments.filter((c) => c.id !== commentId) }
+          ? {
+              ...prev,
+              comments: prev.comments.filter((c) => c.id !== commentId),
+            }
           : prev,
       );
       notify.success("Comment deleted");
@@ -167,7 +195,9 @@ export default function IssueDetailPage() {
 
           {!loading && loadError === "other" && (
             <Card className="border-dashed px-8 py-16 text-center">
-              <p className="text-text-muted">Something went wrong loading this issue.</p>
+              <p className="text-text-muted">
+                Something went wrong loading this issue.
+              </p>
               <p className="text-sm text-text-subtle mt-1">
                 This is usually temporary — check your connection and try again.
               </p>
@@ -198,7 +228,9 @@ export default function IssueDetailPage() {
               </Card>
 
               <div className="mb-8">
-                <h2 className="text-sm font-semibold text-text mb-2">Description</h2>
+                <h2 className="text-sm font-semibold text-text mb-2">
+                  Description
+                </h2>
                 <IssueDescription description={issue.description} />
               </div>
 

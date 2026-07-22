@@ -13,12 +13,15 @@ export interface RoleMeta {
 // - ADMIN: invites/removes members, changes roles, and moderates any
 //   comment (author-or-admin override), with the last-admin lockout
 // MANAGER sits between MEMBER and ADMIN in rank (confirmed by the invite
-// role options and RoleBadge's weight scale), but I haven't seen
-// src/routes/members.ts to confirm what requireRole level actually gates
-// the role-change/remove endpoints — the current UI only checks
-// `isAdmin` client-side, which could be a frontend simplification rather
-// than proof of the real backend rule. Not claiming Manager can change
-// roles until that's confirmed.
+// role options and RoleBadge's weight scale). Confirmed directly against
+// every backend route file (members.ts, issues.ts, projects.ts,
+// comments.ts, decisions.ts, invitations.ts, activity.ts): no route ever
+// calls requireRole("MANAGER") — every actual permission check uses only
+// VIEWER, MEMBER, or ADMIN as the threshold. MANAGER therefore has zero
+// distinct backend permissions today; it behaves identically to MEMBER
+// for every real authorization check. Its only current distinction is
+// rank position when assigning a role. This was previously worded as
+// unconfirmed — now confirmed by direct audit, not guessed.
 export const ROLE_METADATA: Record<Role, RoleMeta> = {
   VIEWER: {
     label: "Viewer",

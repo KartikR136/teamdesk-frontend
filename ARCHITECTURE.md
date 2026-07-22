@@ -23,11 +23,11 @@ Authentication is httpOnly-cookie based (not bearer tokens) with refresh-token r
 
 **No organization can ever access another organization's data.** This is the single hardest requirement the whole backend serves, and it shows up in three separate, reinforcing design decisions:
 
-1. **`organizationId` is denormalized onto every resource** (`Issue`, `Project`, `Comment` via its issue, `ActivityLog`) rather than derived transitively through joins at query time. Every list/read query filters by `organizationId` directly — there's no path where a query can accidentally return cross-org data because a join was written wrong.
+1. **`organizationId` is denormalized onto every resource** (`Issue`, `Project`, `Comment` via its issue, `ActivityLog`, `DecisionLog`) rather than derived transitively through joins at query time. Every list/read query filters by `organizationId` directly — there's no path where a query can accidentally return cross-org data because a join was written wrong.
 2. **JWTs carry only identity, never roles.** Roles are loaded fresh from the database on every request via `requireRole` middleware (with a short-lived Redis cache, see below) — a stale or forged token can never grant a permission the user doesn't currently have.
-3. **Org context is always derived server-side** from the resource being accessed (`resolveOrgFromParam`, `resolveOrgFromIssue`, `resolveOrgFromComment`, `resolveOrgFromProject`), never trusted from a client-supplied field. A request to mutate issue X always re-derives "which org does X belong to" from the database, then checks the authenticated user's membership in _that_ org — closing the class of bug where a client could pass a different organizationId in the request body to escalate access.
+3. **Org context is always derived server-side** from the resource being accessed (`resolveOrgFromParam`, `resolveOrgFromIssue`, `resolveOrgFromComment`, `resolveOrgFromProject`, `resolveOrgFromDecision`), never trusted from a client-supplied field. A request to mutate issue X always re-derives "which org does X belong to" from the database, then checks the authenticated user's membership in _that_ org — closing the class of bug where a client could pass a different organizationId in the request body to escalate access.
 
-This is tested directly, not just assumed: cross-org cursor replay (a pagination cursor minted from Org A's list can't leak Org B's rows even though the underlying cursor lookup is technically global), cross-org comment ownership, and wrong-recipient invitation acceptance are all covered by the backend test suite.
+This is tested directly, not just assumed: cross-org cursor replay (a pagination cursor minted from Org A's list can't leak Org B's rows even though the underlying cursor lookup is technically global), cross-org comment ownership, wrong-recipient invitation acceptance, and cross-org decision access (IDOR, and a `projectId`/`relatedIssueIds` escalation attempt) are all covered by the backend test suite.
 
 ## Folder structure
 
@@ -41,8 +41,8 @@ teamdesk-backend/
 │   │                      activityLog, resolveOrgContext, tokens, password
 │   ├── middleware/        # requireAuth, requireRole (+ cache invalidation),
 │   │                      rateLimiters, errorHandler
-│   ├── routes/            # one file per resource
-│   └── test/              # one file per feature area
+│   ├── routes/            # one file per resource, including decisions.ts
+│   └── test/              # one file per feature area, including decisions.test.ts
 ```
 
 ### Frontend
@@ -56,6 +56,9 @@ teamdesk-frontend/
 │   │       ├── members/page.tsx
 │   │       ├── invitations/page.tsx
 │   │       ├── activity/page.tsx
+│   │       ├── decisions/
+│   │       │   ├── page.tsx                       # decision list
+│   │       │   └── [decisionId]/page.tsx           # decision detail
 │   │       └── projects/[projectId]/
 │   │           ├── page.tsx                       # issue list
 │   │           └── issues/[issueId]/page.tsx       # issue detail
@@ -67,6 +70,9 @@ teamdesk-frontend/
 │   │   ├── dashboard/         # dashboard-specific composition components
 │   │   ├── issue/             # IssueHeader, IssueMetadata, IssueDescription,
 │   │   │                       IssueStatus, IssueComments — all pure-props
+│   │   ├── decisions/          # DecisionCard, DecisionForm, DecisionStatusBadge,
+│   │   │                        StatusChangeControl — all pure-props, mirroring
+│   │   │                        the issue/ folder's composition style
 │   │   ├── members/            # MemberCard, RoleSelector, InviteCard, RoleInfo
 │   │   └── activity/           # ActivityList, ActivityGroup, ActivityItem —
 │   │                            shared by the dashboard preview and full page
@@ -88,11 +94,11 @@ teamdesk-frontend/
 
 ### Pagination
 
-Cursor-based (`{createdAt, id}` compound cursor, base64-encoded, opaque to the client), not offset. Chosen because OFFSET's cost grows linearly with page depth — a stated trade-off from the project's first milestone, not a framework default. The consequence, accepted deliberately: there's no "jump to page 5," only "load more." Search and sort on the frontend (Projects list) operate only on already-loaded pages as a result — labeled honestly in the UI rather than implying a full search.
+Cursor-based (`{createdAt, id}` compound cursor, base64-encoded, opaque to the client), not offset. Chosen because OFFSET's cost grows linearly with page depth — a stated trade-off from the project's first milestone, not a framework default. The consequence, accepted deliberately: there's no "jump to page 5," only "load more." Search and sort on the frontend (Projects list, Issues list) operate only on already-loaded pages as a result — labeled honestly in the UI rather than implying a full search. This is a deliberate, documented product-scoping decision (see `ROADMAP.md`), not an incomplete feature — a global full-text search endpoint was evaluated and is not currently planned.
 
 ### No service/repository layer
 
-Routes call Prisma directly. Considered and explicitly rejected at the point it would have been tempting to add one (to "support activity logging properly"), on the reasoning that it would add a layer of indirection without a concrete, current problem it solves.
+Routes call Prisma directly. Considered and explicitly rejected at the point it would have been tempting to add one (to "support activity logging properly"), on the reasoning that it would add a layer of indirection without a concrete, current problem it solves. Decision Log's routes follow this same rule — no exception was made for the newest resource.
 
 ### Activity logging as an explicit call, not a database trigger
 
@@ -101,6 +107,22 @@ Routes call Prisma directly. Considered and explicitly rejected at the point it 
 ### Redis membership-role caching
 
 One cache key format (`membership:${userId}:${organizationId}`), one place that knows it (`requireRole.ts`), invalidated at exactly the three mutation points that cause staleness: role change, member removal, invitation acceptance. Role-change staleness ("wrong permission level for up to 60s") and removal staleness ("access that should be revoked, isn't yet") are treated as different severities in the code comments, not identically.
+
+### Decision Log's status change as a separate endpoint
+
+`PATCH /decisions/:decisionId/status` exists as its own route rather than folding a status change into the general `PATCH /decisions/:decisionId`. Reasoning: a status transition (`DRAFT → ACCEPTED`, `ACCEPTED → SUPERSEDED`) is a distinct, audit-worthy engineering event on this resource — teams care about _when and by whom_ a decision was accepted or superseded in a way they don't for, say, a typo fix to the trade-offs field. It gets its own `ActivityAction` (`DECISION_STATUS_CHANGED`, capturing both the `from` and `to` value in its metadata) rather than being indistinguishable inside a generic `DECISION_UPDATED` event.
+
+### Decision Log's ownership rule mirrors Comments exactly, not Issues
+
+Editing, changing the status of, or deleting a decision requires being its author or an org ADMIN — the identical rule already established for Comments, and deliberately different from Issues (where any MEMBER+ can update any issue in the org). Reasoning: a decision record's integrity — who actually made this call, and why — matters in a way a shared, collaboratively-edited issue doesn't. Allowing any member to silently rewrite another person's documented rationale would undermine the entire feature's purpose (see PRD 1's "explainable engineering" principle).
+
+### 403 vs. 404 on resource-derived org context — resolved
+
+`requireRole` now accepts `{ notFoundIfNoMembership: true }`, set only on routes reached through a resource-derived resolver (`resolveOrgFromIssue`/`Comment`/`Decision`) — these return 404 for a non-member, matching what `API.md` always documented, rather than the uniform 403 every route used to return. Param-derived routes (`resolveOrgFromParam`) deliberately keep 403, since the caller already supplied the org ID directly. See `THREAT_MODEL.md` for the full before/after and the tests that verify it.
+
+### `MANAGER`'s permission — confirmed by direct audit
+
+Previously worded honestly as unconfirmed in `roles.ts` ("I haven't seen `members.ts`..."). Now confirmed by reading every backend route file directly: **no route anywhere calls `requireRole("MANAGER")`.** Every actual authorization check uses only `VIEWER`, `MEMBER`, or `ADMIN` as the threshold. `MANAGER` therefore has zero distinct backend permissions today — it behaves identically to `MEMBER` for every real check, and its only current distinction is rank position when a role is assigned. This is either a genuine current limitation (if `MANAGER` was meant to unlock something specific) or an accurate reflection that the role exists for future use — either way, `roles.ts` and this document now state the confirmed fact rather than an open question.
 
 ### Frontend: no service/data-fetching layer (e.g. React Query)
 
@@ -114,6 +136,10 @@ Simple primitives (Button, Input, Card, Badge, Skeleton) are hand-written direct
 
 The generic `Badge` primitive has three rank-relevant visual tiers (`neutral`/`subtle`/`solid`); the product's role hierarchy has four (`VIEWER`/`MEMBER`/`MANAGER`/`ADMIN`). Mapping the role hierarchy onto `Badge`'s variant set would collapse two ranks into the same visual weight, losing the signature "badge weight scales with permission rank" pattern established as the product's one deliberately bold visual element. Kept as its own small component instead, using only semantic tokens.
 
+### Keyboard shortcuts on the issue detail page
+
+`E` to edit, `.` to focus the comment box — both guarded against firing while the user is typing in any input, textarea, or contenteditable element. This exists specifically because the product's primary user (per PRD 2) is an engineer whose other daily tools are keyboard-first; per PRD 3's Milestone 3C, keyboard paths are designed alongside mouse paths, not retrofitted afterward. Same `window`-level `addEventListener`/cleanup pattern already established by `Sidebar.tsx`'s `Ctrl+B` shortcut.
+
 ## Deferred UI enhancements
 
 Discovered while building the M3 product-identity pass — named here rather than silently worked around:
@@ -125,5 +151,6 @@ Discovered while building the M3 product-identity pass — named here rather tha
 
 - **CSRF**: cookie-based auth with cross-domain `sameSite: "none"` genuinely removes `sameSite`'s CSRF protection. The standard production fix (double-submit token) is a named "next step," not a blocker — the interview value is in articulating the trade-off correctly, not pre-building a mitigation nobody asked to see yet.
 - **Shared rate-limiter bucket** across `/login`, `/signup`, `/refresh` (one IP-keyed counter, not three) — functional, a real abuse-vector risk, small fix (separate limiter instances or key by IP+route).
-- **No `(organizationId, createdAt)` composite index** — fine at current scale, named as a scaling limitation.
-- **`MANAGER`'s exact distinct permission** beyond rank position in the hierarchy is not confirmed against a specific backend rule — worded honestly in `roles.ts` rather than invented.
+- **No `(organizationId, createdAt)` composite index** — fine at current scale, named as a scaling limitation. Applies to `DecisionLog` as well now, for the same reason.
+- **Decision Log's Attack Console coverage** — resolved; see `THREAT_MODEL.md` for the `idor-cross-org-decision` scenario added alongside the 403/404 fix.
+- **Global/full-text search and Labels** — deliberate, frozen product-scoping decisions (see `ROADMAP.md`), not incomplete features. Both were explicitly reconsidered during the Milestone 6 planning discussion and reaffirmed as out of scope.

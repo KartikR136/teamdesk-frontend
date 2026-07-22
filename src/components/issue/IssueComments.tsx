@@ -61,12 +61,16 @@ export function IssueComments({
         </div>
       ) : (
         <ul className="space-y-4 mb-4">
-          {comments.map((comment) => {
+          {comments.map((comment, i) => {
             const canEditThis =
               currentUserId === comment.author.id || canModerate;
 
             return (
-              <li key={comment.id} className="flex gap-2.5">
+              <li
+                key={comment.id}
+                className="flex gap-2.5 animate-in fade-in slide-in-from-bottom-1 fill-mode-backwards duration-normal ease-standard"
+                style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+              >
                 <Avatar name={comment.author.name} size="md" tone="subtle" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2">
@@ -135,7 +139,10 @@ export function IssueComments({
         </ul>
       )}
 
-      <form onSubmit={handleAdd} className="flex gap-2">
+      <form
+        onSubmit={handleAdd}
+        className="flex gap-2 pt-4 border-t border-border"
+      >
         <Input
           value={newBody}
           onChange={(e) => setNewBody(e.target.value)}

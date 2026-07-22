@@ -14,8 +14,13 @@ export function ActivityGroup({
         {group.label}
       </p>
       <ul className="space-y-2.5">
-        {group.items.map((entry) => (
-          <ActivityItem key={entry.id} entry={entry} compact={compact} />
+        {group.items.map((entry, i) => (
+          <ActivityItem
+            key={entry.id}
+            entry={entry}
+            compact={compact}
+            index={i}
+          />
         ))}
       </ul>
     </div>

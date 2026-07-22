@@ -3,10 +3,14 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bell, ChevronRight } from "lucide-react";
+import { Bell, ChevronRight } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { MobileSidebar } from "./MobileSidebar";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { KBD } from "@/components/ui/KBD";
+import { useCommandPalette } from "@/components/ui/CommandPalette";
 import {
   Dropdown,
   DropdownTrigger,
@@ -17,13 +21,6 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
 
-// Breadcrumbs are derived automatically from the pathname rather than
-// passed as props from every page — this was a named requirement:
-// /dashboard/projects should become "Dashboard > Projects" without any
-// page having to construct that array itself. Route segments are
-// capitalized directly; if a segment needs a custom label (e.g. showing
-// a project's real name instead of its id) that mapping can be added
-// here later without touching any page.
 function useBreadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
@@ -40,21 +37,32 @@ function useBreadcrumbs() {
 export function Header() {
   const { user, logout } = useAuth();
   const crumbs = useBreadcrumbs();
+  const { openPalette } = useCommandPalette();
 
   return (
-    <header className="h-14 border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-sticky">
-      <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-4">
+    <header className="h-14 border-b border-border bg-surface/90 backdrop-blur-sm sticky top-0 z-sticky">
+      <div className="h-full px-4 sm:px-5 flex items-center justify-between gap-4">
+        {/* Left — mobile toggle + breadcrumbs */}
         <div className="flex items-center gap-3 min-w-0">
           <MobileSidebar />
 
-          <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-sm min-w-0">
+          <nav
+            aria-label="Breadcrumb"
+            className="hidden sm:flex items-center gap-1.5 text-sm min-w-0"
+          >
             {crumbs.map((crumb) => (
               <Fragment key={crumb.href}>
                 {crumb.href !== crumbs[0].href && (
-                  <ChevronRight size={14} className="text-text-subtle shrink-0" />
+                  <ChevronRight
+                    size={12}
+                    className="text-text-subtle/50 shrink-0"
+                    strokeWidth={2.5}
+                  />
                 )}
                 {crumb.isLast ? (
-                  <span className="font-medium text-text truncate">{crumb.label}</span>
+                  <span className="font-semibold text-text truncate tracking-tight">
+                    {crumb.label}
+                  </span>
                 ) : (
                   <Link
                     href={crumb.href}
@@ -68,43 +76,53 @@ export function Header() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Search stub — intentionally not a full implementation.
-              Becomes a command palette (⌘K) once there's enough content
-              across the app to warrant one; premature to build now. */}
-          <button
-            className={cn(
-              "hidden md:flex items-center gap-2 h-8 px-3 rounded-md text-sm text-text-subtle",
-              "border border-border hover:border-border-hover transition-colors duration-fast",
-            )}
-          >
-            <Search size={14} />
-            <span>Search</span>
-            <kbd className="ml-2 text-xs bg-surface-hover px-1.5 py-0.5 rounded border border-border">
-              ⌘K
-            </kbd>
-          </button>
+        {/* Right — actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Command palette button */}
+          <Tooltip content={<span className="flex items-center gap-1.5">Search <KBD>⌘K</KBD></span>}>
+            <button
+              onClick={openPalette}
+              className={cn(
+                "hidden md:flex items-center gap-2 h-8 px-2.5 rounded-md",
+                "text-sm text-text-subtle bg-surface-hover/60",
+                "border border-transparent hover:border-border hover:bg-surface",
+                "transition-all duration-fast",
+              )}
+              aria-label="Open search (⌘K)"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <span>Search</span>
+              <KBD>⌘K</KBD>
+            </button>
+          </Tooltip>
+
+          <ThemeToggle />
 
           <OrgSwitcher />
 
-          {/* Notifications placeholder — no backend endpoint exists for
-              this yet, so the icon renders with no unread indicator and
-              no dropdown content. Reserves the UI slot per the nav spec
-              without inventing a feature the backend doesn't support. */}
-          <button
-            className="h-8 w-8 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors duration-fast"
-            aria-label="Notifications"
-          >
-            <Bell size={17} />
-          </button>
+          {/* Notifications placeholder */}
+          <Tooltip content="Notifications — coming soon">
+            <button
+              className="h-8 w-8 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors duration-fast"
+              aria-label="Notifications (coming soon)"
+            >
+              <Bell size={16} />
+            </button>
+          </Tooltip>
 
           <Dropdown>
-            <DropdownTrigger className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring/40">
+            <DropdownTrigger
+              className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring/40"
+              aria-label={user?.name ? `Account menu for ${user.name}` : "Account menu"}
+            >
               <Avatar name={user?.name ?? "?"} size="md" />
             </DropdownTrigger>
-            <DropdownContent align="end">
-              <div className="px-2.5 py-1.5 text-sm text-text-muted truncate">
-                {user?.email}
+            <DropdownContent align="end" className="w-52">
+              <div className="px-3 py-2.5">
+                <p className="text-sm font-medium text-text truncate">{user?.name}</p>
+                <p className="text-xs text-text-muted truncate mt-0.5">{user?.email}</p>
               </div>
               <DropdownSeparator />
               <DropdownItem onSelect={logout}>Log out</DropdownItem>

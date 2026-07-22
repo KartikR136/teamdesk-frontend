@@ -18,6 +18,7 @@ export function DialogContent({
         className={cn(
           "fixed inset-0 bg-text/20 backdrop-blur-[2px] z-overlay",
           "data-[state=open]:animate-in data-[state=open]:fade-in",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out",
           "duration-normal ease-standard",
         )}
       />
@@ -26,6 +27,9 @@ export function DialogContent({
           "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-dialog",
           "w-full max-w-md rounded-xl border border-border bg-surface shadow-lg p-5",
           "focus:outline-none",
+          "data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95",
+          "duration-normal ease-standard",
           className,
         )}
         {...props}
@@ -75,9 +79,6 @@ export function DialogFooter({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div
-      className={cn("flex justify-end gap-2 mt-5", className)}
-      {...props}
-    />
+    <div className={cn("flex justify-end gap-2 mt-5", className)} {...props} />
   );
 }

@@ -1,8 +1,64 @@
 @import "tailwindcss";
 @import "../styles/theme.css";
 
+/* ── Font variable bridging ───────────────────────────────────────────
+   Next.js injects --font-geist-sans and --font-geist-mono as CSS
+   variables on <html>. We forward them into our semantic tokens so
+   the design system only ever references --font-sans / --font-mono.   */
+:root {
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --font-mono: var(--font-geist-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--text);
   font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Selection ────────────────────────────────────────────────────── */
+::selection {
+  background: var(--primary-subtle);
+  color: var(--primary);
+}
+
+/* ── Focus ────────────────────────────────────────────────────────── */
+*:focus {
+  outline: none;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-subtle);
+}
+
+/* ── Radix data-state classes for Tailwind targeting ──────────────── */
+[data-state="open"]   { --tw-data-state: open; }
+[data-state="closed"] { --tw-data-state: closed; }
+
+/* ── Utility overrides ────────────────────────────────────────────── */
+/* Prevent number inputs showing spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
 }

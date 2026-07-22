@@ -89,6 +89,52 @@ export interface Member {
   user: { id: string; name: string; email: string };
 }
 
+export type DecisionStatus = "DRAFT" | "ACCEPTED" | "SUPERSEDED" | "ARCHIVED";
+
+export const DECISION_STATUSES: { value: DecisionStatus; label: string }[] = [
+  { value: "DRAFT", label: "Draft" },
+  { value: "ACCEPTED", label: "Accepted" },
+  { value: "SUPERSEDED", label: "Superseded" },
+  { value: "ARCHIVED", label: "Archived" },
+];
+
+// Confirmed against src/routes/decisions.ts's decisionInclude and the
+// backend Zod schema (decisionBodySchema) — every field here is either
+// a required create-time field, an explicitly optional one, or a field
+// added server-side (id, organizationId, authorId, createdAt).
+export interface DecisionRelatedIssue {
+  issue: { id: string; title: string; status: IssueStatus };
+}
+
+export interface Decision {
+  id: string;
+  title: string;
+  problemStatement: string;
+  context: string;
+  alternatives: string;
+  chosenSolution: string;
+  tradeoffs: string;
+  consequences: string | null;
+  status: DecisionStatus;
+  projectId: string | null;
+  reviewDate: string | null;
+  organizationId: string;
+  authorId: string;
+  createdAt: string;
+  author: { id: string; name: string };
+  project: { id: string; name: string } | null;
+  relatedIssues: DecisionRelatedIssue[];
+}
+
+// Shape returned by the list endpoint (GET /organizations/:id/decisions) —
+// deliberately lighter than the full Decision type. The list route's
+// Prisma `include` only selects `author` and `project`, not
+// `relatedIssues` — confirmed directly against decisions.ts, not assumed.
+// Modeling this as its own type (rather than reusing Decision and just
+// not populating relatedIssues) means the list page can never
+// accidentally try to render a field the list endpoint never sent.
+export type DecisionListItem = Omit<Decision, "relatedIssues">;
+
 export interface Invitation {
   id: string;
   email: string;
@@ -133,7 +179,11 @@ export type ActivityAction =
   | "MEMBER_INVITED"
   | "MEMBER_JOINED"
   | "MEMBER_ROLE_CHANGED"
-  | "MEMBER_REMOVED";
+  | "MEMBER_REMOVED"
+  | "DECISION_CREATED"
+  | "DECISION_UPDATED"
+  | "DECISION_STATUS_CHANGED"
+  | "DECISION_DELETED";
 
 export interface ActivityEntry {
   id: string;
