@@ -199,3 +199,111 @@ export interface ActivityEntry {
    * Not read speculatively; see ActivityFeed.tsx's describe(). */
   metadata?: unknown;
 }
+
+// ---------------------------------------------------------------------
+// Meetings — backs both the dashboard's "Today's Meetings" widget and
+// the dedicated /dashboard/meetings pages. MeetingKind/MeetingSummary
+// mirror the backend's dashboard.dto.ts MeetingDto field-for-field
+// (same convention this file's header comment already establishes for
+// every other resource here).
+// ---------------------------------------------------------------------
+
+export type MeetingKind =
+  | "STANDUP"
+  | "SPRINT_PLANNING"
+  | "DESIGN_REVIEW"
+  | "BACKEND_SYNC"
+  | "DEMO"
+  | "RETROSPECTIVE"
+  | "ONE_ON_ONE"
+  | "INCIDENT_REVIEW"
+  | "OTHER";
+
+export const MEETING_KINDS: { value: MeetingKind; label: string }[] = [
+  { value: "STANDUP", label: "Standup" },
+  { value: "SPRINT_PLANNING", label: "Sprint Planning" },
+  { value: "DESIGN_REVIEW", label: "Design Review" },
+  { value: "BACKEND_SYNC", label: "Backend Sync" },
+  { value: "DEMO", label: "Demo" },
+  { value: "RETROSPECTIVE", label: "Retrospective" },
+  { value: "ONE_ON_ONE", label: "1:1" },
+  { value: "INCIDENT_REVIEW", label: "Incident Review" },
+  { value: "OTHER", label: "Other" },
+];
+
+export type MeetingRsvpStatus =
+  | "INVITED"
+  | "ACCEPTED"
+  | "DECLINED"
+  | "TENTATIVE";
+
+export type RecurrenceRule = "NONE" | "DAILY" | "WEEKDAYS" | "WEEKLY";
+
+export const RECURRENCE_RULES: { value: RecurrenceRule; label: string }[] = [
+  { value: "NONE", label: "Does not repeat" },
+  { value: "DAILY", label: "Every day" },
+  { value: "WEEKDAYS", label: "Every weekday (Mon–Fri)" },
+  { value: "WEEKLY", label: "Every week" },
+];
+
+/** Shape used by the dashboard's "Today's Meetings" widget — matches
+ * dashboard.dto.ts's MeetingDto exactly. */
+export interface MeetingSummary {
+  id: string;
+  kind: MeetingKind;
+  title: string;
+  startsAt: string;
+  durationMinutes: number;
+  attendeeCount: number;
+  organizationId?: string;
+  organizationName?: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  location?: string | null;
+  myRsvpStatus?: MeetingRsvpStatus;
+  isOrganizer?: boolean;
+  linkedIssueCount?: number;
+}
+
+export interface MeetingAttendee {
+  id: string;
+  status: MeetingRsvpStatus;
+  respondedAt: string | null;
+  user: { id: string; name: string; email: string };
+}
+
+export interface MeetingLinkedIssue {
+  id: string;
+  issue: {
+    id: string;
+    title: string;
+    status: IssueStatus;
+    priority: IssuePriority;
+    projectId?: string;
+  };
+}
+
+/** Full meeting shape returned by GET /meetings/:id and the
+ * organizations/:id/meetings list — matches meetingInclude() in the
+ * backend's routes/meetings.ts. */
+export interface Meeting {
+  id: string;
+  title: string;
+  kind: MeetingKind;
+  description: string | null;
+  startsAt: string;
+  durationMinutes: number;
+  location: string | null;
+  notes: string | null;
+  recurrenceRule: RecurrenceRule;
+  seriesId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  organizationId: string;
+  projectId: string | null;
+  createdById: string;
+  createdBy: { id: string; name: string };
+  project: { id: string; name: string } | null;
+  attendees: MeetingAttendee[];
+  linkedIssues: MeetingLinkedIssue[];
+}

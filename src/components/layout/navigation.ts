@@ -7,6 +7,7 @@ import {
   Settings,
   ShieldCheck,
   ScrollText,
+  CalendarClock,
 } from "lucide-react";
 import type { Role } from "@/types";
 
@@ -30,6 +31,7 @@ export interface NavItem {
 // Sidebar.tsx and MobileSidebar.tsx just map over it, no rewrite needed.
 export const navigation: NavItem[] = [
   { label: "Projects", href: "/dashboard/projects", icon: LayoutDashboard },
+  { label: "Meetings", href: "/dashboard/meetings", icon: CalendarClock },
   { label: "Members", href: "/dashboard/members", icon: Users },
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
