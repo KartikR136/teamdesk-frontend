@@ -307,3 +307,103 @@ export interface Meeting {
   attendees: MeetingAttendee[];
   linkedIssues: MeetingLinkedIssue[];
 }
+
+// ---------------------------------------------------------------------
+// Pull Requests — backs both the dashboard's "Pull Requests Awaiting
+// Review" widget and the dedicated /dashboard/pull-requests pages.
+// Mirrors the Meetings section above field-for-field against the
+// backend's dashboard.dto.ts PullRequestDto and routes/pullRequests.ts.
+// ---------------------------------------------------------------------
+
+export type PRMergeStatus = "clean" | "conflicts" | "checks_failing";
+export type PRReviewUrgency = "low" | "medium" | "high";
+export type PRStatus = "OPEN" | "MERGED" | "CLOSED";
+export type PRReviewStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "CHANGES_REQUESTED"
+  | "COMMENTED";
+
+/** Shape used by the dashboard's "Pull Requests Awaiting Review" widget —
+ * matches dashboard.dto.ts's PullRequestDto exactly. */
+export interface PullRequestSummary {
+  id: string;
+  repo: string;
+  branch: string;
+  title: string;
+  author: string;
+  openedAt: string;
+  filesChanged: number;
+  mergeStatus: PRMergeStatus;
+  urgency: PRReviewUrgency;
+  url: string;
+  organizationId?: string;
+  organizationName?: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  targetBranch?: string;
+  status?: PRStatus;
+  linesAdded?: number;
+  linesRemoved?: number;
+  myReviewStatus?: PRReviewStatus;
+  isAuthor?: boolean;
+  linkedIssueCount?: number;
+  commentCount?: number;
+}
+
+export interface PullRequestReviewer {
+  id: string;
+  status: PRReviewStatus;
+  requestedAt: string;
+  respondedAt: string | null;
+  user: { id: string; name: string; email: string };
+}
+
+export interface PullRequestLinkedIssue {
+  id: string;
+  issue: {
+    id: string;
+    title: string;
+    status: IssueStatus;
+    priority: IssuePriority;
+    projectId?: string;
+  };
+}
+
+export interface PullRequestComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  author: { id: string; name: string };
+}
+
+/** Full pull request shape returned by GET /pull-requests/:id and the
+ * organizations/:id/pull-requests list — matches prInclude() in the
+ * backend's routes/pullRequests.ts. */
+export interface PullRequest {
+  id: string;
+  title: string;
+  description: string | null;
+  repoName: string;
+  sourceBranch: string;
+  targetBranch: string;
+  status: PRStatus;
+  mergeStatus: "CLEAN" | "CONFLICTS" | "CHECKS_FAILING";
+  filesChanged: number;
+  linesAdded: number;
+  linesRemoved: number;
+  externalUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  mergedAt: string | null;
+  closedAt: string | null;
+  organizationId: string;
+  projectId: string | null;
+  authorId: string;
+  author: { id: string; name: string; email: string };
+  project: { id: string; name: string } | null;
+  reviewers: PullRequestReviewer[];
+  linkedIssues: PullRequestLinkedIssue[];
+  _count: { comments: number };
+}
