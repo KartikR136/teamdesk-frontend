@@ -35,6 +35,7 @@ export default function IssueDetailPage() {
     null,
   );
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [assigneeUpdating, setAssigneeUpdating] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -96,6 +97,40 @@ export default function IssueDetailPage() {
       notify.error("Could not update status", message);
     } finally {
       setStatusUpdating(false);
+    }
+  }
+
+  async function handleAssigneeChange(assigneeId: string | null) {
+    if (!issue) return;
+    setAssigneeUpdating(true);
+    const previous = issue.assignee;
+    // Not optimistic like handleStatusChange: we don't know the assignee's
+    // display name client-side without guessing from whatever the picker
+    // happens to have loaded, so we wait for the PATCH response (which
+    // includes the real assignee relation) before updating the UI.
+    try {
+      const updated = await apiFetch<IssueDetail>(`/api/issues/${issueId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ assigneeId }),
+      });
+      setIssue((prev) =>
+        prev ? { ...prev, assignee: updated.assignee } : prev,
+      );
+      notify.success(
+        updated.assignee
+          ? `Assigned to ${updated.assignee.name}`
+          : "Unassigned",
+      );
+    } catch (err) {
+      console.error("Failed to update issue assignee", issueId, err);
+      setIssue((prev) => (prev ? { ...prev, assignee: previous } : prev));
+      const message =
+        err instanceof ApiError && err.status === 403
+          ? "You don't have permission to assign this issue."
+          : "Please try again.";
+      notify.error("Could not update assignee", message);
+    } finally {
+      setAssigneeUpdating(false);
     }
   }
 
@@ -222,6 +257,10 @@ export default function IssueDetailPage() {
                   priority={issue.priority}
                   creator={issue.creator}
                   assignee={issue.assignee}
+                  onAssigneeChange={handleAssigneeChange}
+                  assigneeDisabled={assigneeUpdating}
+                  organizationId={currentOrg?.id}
+                  canAssign={currentOrg?.role !== "VIEWER"}
                   createdAt={issue.createdAt}
                   updatedAt={issue.updatedAt}
                 />

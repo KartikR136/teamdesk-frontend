@@ -35,6 +35,10 @@ export interface Project {
    * by GET /organizations/:id/projects — verified against the real route
    * and schema, not assumed. No updatedAt exists on this model. */
   createdAt: string;
+  /** Count of non-DONE issues, added alongside the projects-list page.
+   * Backend returns `_count: { issues }`; mapped to this flatter name in
+   * the one place we destructure the raw response (the projects page). */
+  _count?: { issues: number };
 }
 
 export type IssuePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";

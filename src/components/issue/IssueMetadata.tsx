@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
 import { IssueStatusControl } from "./IssueStatus";
+import { IssueAssigneeControl } from "./IssueAssignee";
 import type { IssuePriority, IssueStatus } from "@/types";
 
 const PRIORITY_VARIANT: Record<
@@ -35,6 +36,10 @@ export function IssueMetadata({
   priority,
   creator,
   assignee,
+  onAssigneeChange,
+  assigneeDisabled,
+  organizationId,
+  canAssign,
   createdAt,
   updatedAt,
 }: {
@@ -44,6 +49,10 @@ export function IssueMetadata({
   priority: IssuePriority;
   creator: { id: string; name: string };
   assignee: { id: string; name: string } | null;
+  onAssigneeChange: (assigneeId: string | null) => void;
+  assigneeDisabled?: boolean;
+  organizationId: string | undefined;
+  canAssign: boolean;
   createdAt: string;
   updatedAt: string;
 }) {
@@ -73,14 +82,13 @@ export function IssueMetadata({
         <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-1.5">
           Assignee
         </p>
-        {assignee ? (
-          <div className="flex items-center gap-1.5">
-            <Avatar name={assignee.name} size="sm" tone="subtle" />
-            <span className="text-text">{assignee.name}</span>
-          </div>
-        ) : (
-          <span className="text-text-subtle">Unassigned</span>
-        )}
+        <IssueAssigneeControl
+          organizationId={organizationId}
+          assignee={assignee}
+          onChange={onAssigneeChange}
+          disabled={assigneeDisabled}
+          canAssign={canAssign}
+        />
       </div>
 
       <div>

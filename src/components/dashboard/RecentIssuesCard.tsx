@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { History, ChevronRight } from "lucide-react";
 import { WidgetCard, type WidgetStatus } from "./WidgetCard";
@@ -8,11 +9,11 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
-import {
-  getMockDashboardData,
-  type RecentlyViewedIssue,
+import type {
+  RecentlyViewedIssue,
+  DashboardHomeResponse,
 } from "@/mock/dashboard";
-import { isAbortError } from "@/lib/api";
+import { apiFetch, isAbortError } from "@/lib/api";
 import type { IssuePriority, IssueStatus } from "@/types";
 
 const PRIORITY_VARIANT: Record<
@@ -52,29 +53,32 @@ function IssueRow({
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: Math.min(index, 10) * 0.03, duration: 0.25 }}
-      // TODO: wrap in <Link href={`/dashboard/projects/:projectId/issues/${issue.id}`}>
-      // once recently-viewed items carry a real projectId from the backend.
-      className={cn(
-        "group flex items-center gap-3 py-2.5 px-2 -mx-2 rounded-md",
-        "hover:bg-surface-hover transition-colors duration-fast cursor-pointer",
-      )}
     >
-      <Badge variant={PRIORITY_VARIANT[issue.priority]} className="shrink-0">
-        {issue.priority}
-      </Badge>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-text truncate group-hover:text-primary transition-colors">
-          {issue.title}
-        </p>
-        <p className="text-xs text-text-subtle">
-          {issue.projectName} · {STATUS_LABEL[issue.status]} · viewed{" "}
-          {timeAgo(issue.lastViewedAt)}
-        </p>
-      </div>
-      <ChevronRight
-        size={15}
-        className="text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0"
-      />
+      <Link
+        href={`/dashboard/projects/${issue.projectId}/issues/${issue.id}`}
+        className={cn(
+          "group flex items-center gap-3 py-2.5 px-2 -mx-2 rounded-md",
+          "hover:bg-surface-hover transition-colors duration-fast",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        )}
+      >
+        <Badge variant={PRIORITY_VARIANT[issue.priority]} className="shrink-0">
+          {issue.priority}
+        </Badge>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-text truncate group-hover:text-primary transition-colors">
+            {issue.title}
+          </p>
+          <p className="text-xs text-text-subtle">
+            {issue.projectName} · {STATUS_LABEL[issue.status]} · viewed{" "}
+            {timeAgo(issue.lastViewedAt)}
+          </p>
+        </div>
+        <ChevronRight
+          size={15}
+          className="text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0"
+        />
+      </Link>
     </motion.div>
   );
 }
@@ -88,12 +92,12 @@ export function RecentIssuesCard() {
     void (async () => {
       setStatus("loading");
       try {
-        // TODO: Replace with `apiFetch<DashboardHomeResponse>(
-        //   "/api/dashboard/home", { signal: controller.signal },
-        // )` and read `.recentIssues`.
-        await new Promise((r) => setTimeout(r, 300));
+        const response = await apiFetch<DashboardHomeResponse>(
+          "/api/dashboard/home",
+          { signal: controller.signal },
+        );
         if (controller.signal.aborted) return;
-        const data = getMockDashboardData().recentIssues;
+        const data = response.recentIssues;
         setIssues(data);
         setStatus(data.length === 0 ? "empty" : "ready");
       } catch (err) {

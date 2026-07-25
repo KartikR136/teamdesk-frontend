@@ -10,6 +10,7 @@ import type { IssuePriority, IssueStatus } from "@/types";
 export interface AssignedTask {
   id: string;
   title: string;
+  projectId: string;
   projectName: string;
   status: IssueStatus;
   priority: IssuePriority;
@@ -100,6 +101,7 @@ export interface Meeting {
 export interface RecentlyViewedIssue {
   id: string;
   title: string;
+  projectId: string;
   projectName: string;
   priority: IssuePriority;
   status: IssueStatus;
@@ -167,6 +169,7 @@ export function getMockDashboardData(): DashboardHomeResponse {
       {
         id: "task-1",
         title: "Fix cross-tenant leak in decision status webhook",
+        projectId: "proj-core-platform",
         projectName: "Core Platform",
         status: "IN_PROGRESS",
         priority: "URGENT",
@@ -177,6 +180,7 @@ export function getMockDashboardData(): DashboardHomeResponse {
       {
         id: "task-2",
         title: "Add pagination cursor validation tests",
+        projectId: "proj-core-platform",
         projectName: "Core Platform",
         status: "TODO",
         priority: "HIGH",
@@ -187,6 +191,7 @@ export function getMockDashboardData(): DashboardHomeResponse {
       {
         id: "task-3",
         title: "Migrate RoleBadge to new token set",
+        projectId: "proj-design-system",
         projectName: "Design System",
         status: "IN_REVIEW",
         priority: "MEDIUM",
@@ -327,6 +332,7 @@ export function getMockDashboardData(): DashboardHomeResponse {
       {
         id: "issue-101",
         title: "Cursor pagination breaks on empty result page",
+        projectId: "proj-core-platform",
         projectName: "Core Platform",
         priority: "HIGH",
         status: "IN_REVIEW",
@@ -335,6 +341,7 @@ export function getMockDashboardData(): DashboardHomeResponse {
       {
         id: "issue-102",
         title: "RoleBadge weight scale unclear on colorblind mode",
+        projectId: "proj-design-system",
         projectName: "Design System",
         priority: "LOW",
         status: "TODO",
@@ -343,6 +350,7 @@ export function getMockDashboardData(): DashboardHomeResponse {
       {
         id: "issue-103",
         title: "Decision Log entry export as PDF",
+        projectId: "proj-core-platform",
         projectName: "Core Platform",
         priority: "MEDIUM",
         status: "TODO",

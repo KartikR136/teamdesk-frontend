@@ -29,7 +29,7 @@ export interface NavItem {
 // a role restriction, or a badge count later means editing this array —
 // Sidebar.tsx and MobileSidebar.tsx just map over it, no rewrite needed.
 export const navigation: NavItem[] = [
-  { label: "Projects", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Projects", href: "/dashboard/projects", icon: LayoutDashboard },
   { label: "Members", href: "/dashboard/members", icon: Users },
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
