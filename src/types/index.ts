@@ -407,3 +407,84 @@ export interface PullRequest {
   linkedIssues: PullRequestLinkedIssue[];
   _count: { comments: number };
 }
+
+// ---------------------------------------------------------------------
+// Deployments — mirrors the PullRequest section above field-for-field.
+// Backed by prisma's Deployment model + routes/deployments.ts.
+// ---------------------------------------------------------------------
+
+export type DeployEnvironment =
+  | "PRODUCTION"
+  | "PREVIEW"
+  | "STAGING"
+  | "DEVELOPMENT";
+
+export type DeployStatus =
+  | "QUEUED"
+  | "IN_PROGRESS"
+  | "SUCCESS"
+  | "FAILED"
+  | "ROLLED_BACK";
+
+export type DeployHealth = "UNKNOWN" | "HEALTHY" | "DEGRADED" | "UNHEALTHY";
+
+/** Full deployment shape returned by GET /deployments/:id and the
+ * organizations/:id/deployments list — matches deploymentInclude() in the
+ * backend's routes/deployments.ts. */
+export interface Deployment {
+  id: string;
+  environment: DeployEnvironment;
+  status: DeployStatus;
+  health: DeployHealth;
+  commitHash: string;
+  commitMessage: string;
+  branch: string;
+  durationSeconds: number | null;
+  notes: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  healthCheckedAt: string | null;
+  rolledBackAt: string | null;
+  organizationId: string;
+  projectId: string | null;
+  pullRequestId: string | null;
+  triggeredById: string;
+  rolledBackById: string | null;
+  previousDeploymentId: string | null;
+  triggeredBy: { id: string; name: string; email: string };
+  rolledBackBy: { id: string; name: string } | null;
+  project: { id: string; name: string } | null;
+  pullRequest: {
+    id: string;
+    title: string;
+    mergedAt: string | null;
+    repoName: string;
+  } | null;
+  previousDeployment: {
+    id: string;
+    commitHash: string;
+    environment: DeployEnvironment;
+    createdAt: string;
+  } | null;
+  rollbacks: {
+    id: string;
+    commitHash: string;
+    createdAt: string;
+    status: DeployStatus;
+  }[];
+}
+
+export interface DoraTierMetric {
+  tier: "Elite" | "High" | "Medium" | "Low" | "Unknown";
+}
+
+export interface DoraMetrics {
+  environment: DeployEnvironment;
+  windowDays: number;
+  totalDeployments: number;
+  deploymentFrequency: { perDay: number } & DoraTierMetric;
+  leadTimeForChanges: { hours: number | null; sampleSize: number } & DoraTierMetric;
+  changeFailureRate: { percent: number } & DoraTierMetric;
+  mttr: { hours: number | null; sampleSize: number } & DoraTierMetric;
+}

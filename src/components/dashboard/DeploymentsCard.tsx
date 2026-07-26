@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Rocket,
@@ -10,17 +11,37 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { WidgetCard, type WidgetStatus } from "./WidgetCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
-import {
-  getMockDashboardData,
-  type Deployment,
-  type DeployEnvironment,
-} from "@/mock/dashboard";
-import { isAbortError } from "@/lib/api";
+import { apiFetch, isAbortError } from "@/lib/api";
+
+// Frontend's own dashboard-widget shape (lowercase environment/status
+// literals) — matches DeploymentDto in the backend's dashboard.dto.ts,
+// not the full native Deployment type in @/types (that one backs the
+// /dashboard/deployments detail pages instead).
+type DeployEnvironment = "production" | "preview" | "staging" | "development";
+
+interface DashboardDeployment {
+  id: string;
+  environment: DeployEnvironment;
+  status: "success" | "failed" | "in_progress";
+  commitHash: string;
+  commitMessage: string;
+  durationSeconds: number;
+  triggeredBy: string;
+  deployedAt: string;
+  url?: string;
+}
+
+// Shape returned by GET /api/dashboard/home — only the one field this
+// widget actually reads, matching PullRequestsCard.tsx's convention.
+interface DashboardHomeDeploymentsResponse {
+  deployments: DashboardDeployment[];
+}
 
 const ENV_CONFIG: Record<
   DeployEnvironment,
@@ -56,13 +77,13 @@ function DeployRow({
   index,
   isLast,
 }: {
-  d: Deployment;
+  d: DashboardDeployment;
   index: number;
   isLast: boolean;
 }) {
   const env = ENV_CONFIG[d.environment];
   const statusCfg = STATUS_CONFIG[d.status];
-  return (
+  const row = (
     <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
@@ -82,7 +103,7 @@ function DeployRow({
         {!isLast && <span className="w-px flex-1 bg-border mt-1" />}
       </div>
 
-      <div className="flex-1 min-w-0 pb-1">
+      <div className="flex-1 min-w-0 pb-1 group">
         <div className="flex items-center gap-1.5 text-xs font-medium text-text-muted mb-0.5">
           {env.icon}
           {env.label}
@@ -90,7 +111,7 @@ function DeployRow({
             · {hoursAgo(d.deployedAt)}
           </span>
         </div>
-        <p className="text-sm text-text leading-snug truncate">
+        <p className="text-sm text-text leading-snug truncate group-hover:text-primary transition-colors">
           {d.commitMessage}
         </p>
         <p className="text-xs text-text-subtle font-mono mt-0.5">
@@ -99,40 +120,47 @@ function DeployRow({
       </div>
     </motion.div>
   );
+
+  return d.url ? (
+    <Link href={d.url} className="block">
+      {row}
+    </Link>
+  ) : (
+    row
+  );
 }
 
 export function DeploymentsCard() {
   const [status, setStatus] = useState<WidgetStatus>("loading");
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [deployments, setDeployments] = useState<DashboardDeployment[]>([]);
+
+  const load = useCallback((signal?: AbortSignal) => {
+    setStatus("loading");
+    return apiFetch<DashboardHomeDeploymentsResponse>("/api/dashboard/home", {
+      signal,
+    })
+      .then((data) => {
+        setDeployments(data.deployments);
+        setStatus(data.deployments.length === 0 ? "empty" : "ready");
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        setStatus("error");
+      });
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
-    void (async () => {
-      setStatus("loading");
-      try {
-        // TODO: Replace with `apiFetch<DashboardHomeResponse>(
-        //   "/api/dashboard/home", { signal: controller.signal },
-        // )` and read `.deployments` — likely backed by a CI/CD
-        // provider webhook feed server-side.
-        await new Promise((r) => setTimeout(r, 300));
-        if (controller.signal.aborted) return;
-        const data = getMockDashboardData().deployments;
-        setDeployments(data);
-        setStatus(data.length === 0 ? "empty" : "ready");
-      } catch (err) {
-        if (isAbortError(err)) return;
-        setStatus("error");
-      }
-    })();
+    void load(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [load]);
 
   return (
     <WidgetCard
       title="Recent Deployments"
       icon={<Rocket size={15} />}
       status={status}
-      onRetry={() => setStatus("loading")}
+      onRetry={() => void load()}
       skeleton={
         <div className="space-y-4">
           {[0, 1, 2].map((i) => (
@@ -151,7 +179,7 @@ export function DeploymentsCard() {
         <EmptyState
           icon={<Rocket size={26} />}
           title="No deployments yet"
-          description="Once CI/CD is connected, every deploy will show up here."
+          description="Ship your first deploy to see it show up here."
           compact
         />
       }
@@ -164,6 +192,15 @@ export function DeploymentsCard() {
           isLast={i === deployments.length - 1}
         />
       ))}
+      {deployments.length > 0 && (
+        <Link
+          href="/dashboard/deployments"
+          className="mt-3 flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          View all deployments
+          <ArrowRight size={12} />
+        </Link>
+      )}
     </WidgetCard>
   );
 }

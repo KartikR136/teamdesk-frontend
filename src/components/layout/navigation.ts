@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   ScrollText,
   CalendarClock,
+  Rocket,
 } from "lucide-react";
 import type { Role } from "@/types";
 
@@ -32,6 +33,7 @@ export interface NavItem {
 export const navigation: NavItem[] = [
   { label: "Projects", href: "/dashboard/projects", icon: LayoutDashboard },
   { label: "Meetings", href: "/dashboard/meetings", icon: CalendarClock },
+  { label: "Deployments", href: "/dashboard/deployments", icon: Rocket },
   { label: "Members", href: "/dashboard/members", icon: Users },
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
