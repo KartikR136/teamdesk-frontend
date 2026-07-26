@@ -54,7 +54,7 @@ const ENV_CONFIG: Record<
 };
 
 const STATUS_CONFIG: Record<
-  Deployment["status"],
+  DashboardDeployment["status"],
   { icon: React.ReactNode; color: string }
 > = {
   success: { icon: <CheckCircle2 size={14} />, color: "text-success" },
@@ -151,7 +151,9 @@ export function DeploymentsCard() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    queueMicrotask(() => {
+      void load(controller.signal);
+    });
     return () => controller.abort();
   }, [load]);
 
