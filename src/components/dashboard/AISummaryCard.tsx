@@ -5,10 +5,14 @@ import { motion } from "framer-motion";
 import { Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
-import { getMockDashboardData, type AISummary } from "@/mock/dashboard";
-import { isAbortError } from "@/lib/api";
+import type { AISummary } from "@/mock/dashboard";
+import { apiFetch, isAbortError } from "@/lib/api";
 
 type Status = "loading" | "error" | "ready";
+
+interface DashboardHomeResponse {
+  aiSummary: AISummary;
+}
 
 /**
  * Deliberately its own bespoke shell rather than WidgetCard — the spec
@@ -21,6 +25,7 @@ type Status = "loading" | "error" | "ready";
 export function AISummaryCard() {
   const [status, setStatus] = useState<Status>("loading");
   const [summary, setSummary] = useState<AISummary | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -28,13 +33,14 @@ export function AISummaryCard() {
     void (async () => {
       setStatus("loading");
       try {
-        // TODO: Replace with `await apiFetch<DashboardHomeResponse>(
-        //   "/api/dashboard/home", { signal: controller.signal },
-        // )` once the backend milestone lands — this component only
-        // needs the `.aiSummary` slice of that response.
-        await new Promise((r) => setTimeout(r, 350));
+        // Backend generates this with a real LLM call (or falls back to a
+        // deterministic template if no ANTHROPIC_API_KEY is configured) —
+        // see DashboardSummaryService / AnthropicDashboardSummaryService.
+        const data = await apiFetch<DashboardHomeResponse>("/api/dashboard/home", {
+          signal: controller.signal,
+        });
         if (controller.signal.aborted) return;
-        setSummary(getMockDashboardData().aiSummary);
+        setSummary(data.aiSummary);
         setStatus("ready");
       } catch (err) {
         if (isAbortError(err)) return;
@@ -43,7 +49,7 @@ export function AISummaryCard() {
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border shadow-md">
@@ -85,7 +91,7 @@ export function AISummaryCard() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setStatus("loading")}
+              onClick={() => setAttempt((n) => n + 1)}
             >
               <RefreshCw size={13} className="mr-1.5" />
               Retry
