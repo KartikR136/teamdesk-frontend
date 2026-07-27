@@ -114,6 +114,52 @@ export interface CodingStats {
   reviewsCompletedThisWeek: number;
   commitsThisWeek: number;
   focusHoursThisWeek: number;
+  // Additive — mirrors backend/src/modules/dashboard/dto/dashboard.dto.ts's
+  // CodingStatsDto. Optional so the original mock data (which doesn't set
+  // these) keeps satisfying the type.
+  longestStreakDays?: number;
+  streakFreezesAvailable?: number;
+  weeklyCommitGoal?: number;
+  weeklyIssueGoal?: number;
+  commitGoalProgress?: number;
+  issueGoalProgress?: number;
+}
+
+export interface HeatmapCell {
+  date: string; // YYYY-MM-DD
+  level: 0 | 1 | 2 | 3;
+  frozen: boolean;
+}
+
+export interface Achievement {
+  type: string;
+  label: string;
+  description: string;
+  unlockedAt: string; // ISO
+}
+
+export interface CodingStreakDetail {
+  currentStreakDays: number;
+  longestStreakDays: number;
+  streakFreezesAvailable: number;
+  heatmap: HeatmapCell[];
+  achievements: Achievement[];
+  weeklyCommitGoal: number;
+  weeklyIssueGoal: number;
+  commitsThisWeek: number;
+  issuesCompletedThisWeek: number;
+  reviewsCompletedThisWeek: number;
+  focusHoursThisWeek: number;
+  webhookUrl: string | null;
+  githubActionsSnippet: string;
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  name: string;
+  currentStreakDays: number;
+  longestStreakDays: number;
+  isSelf: boolean;
 }
 
 export interface AISummary {

@@ -9,11 +9,13 @@ import {
   Clock,
   CheckCircle2,
 } from "lucide-react";
+import Link from "next/link";
 import { WidgetCard, type WidgetStatus } from "./WidgetCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { getMockDashboardData, type CodingStats } from "@/mock/dashboard";
-import { isAbortError } from "@/lib/api";
+import { Progress } from "@/components/ui/Progress";
+import { type CodingStats, type DashboardHomeResponse } from "@/mock/dashboard";
+import { apiFetch, isAbortError } from "@/lib/api";
 
 // Streak milestones worth a small celebratory highlight — 7/14/30/60/100
 // day marks. Anything else just renders as a normal number.
@@ -64,12 +66,11 @@ export function CodingStreakCard() {
     void (async () => {
       setStatus("loading");
       try {
-        // TODO: Replace with `apiFetch<DashboardHomeResponse>(
-        //   "/api/dashboard/home", { signal: controller.signal },
-        // )` and read `.codingStats`.
-        await new Promise((r) => setTimeout(r, 300));
+        const home = await apiFetch<DashboardHomeResponse>("/api/dashboard/home", {
+          signal: controller.signal,
+        });
         if (controller.signal.aborted) return;
-        setStats(getMockDashboardData().codingStats);
+        setStats(home.codingStats);
         setStatus("ready");
       } catch (err) {
         if (isAbortError(err)) return;
@@ -152,6 +153,34 @@ export function CodingStreakCard() {
               label="Focus hrs"
             />
           </div>
+
+          {/* Weekly goal progress — only renders once the backend has
+              returned goal fields (older cached responses without them
+              simply skip this section rather than showing 0/0). */}
+          {stats.weeklyCommitGoal !== undefined && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between text-[11px] text-text-subtle">
+                <span>Commit goal</span>
+                <span className="tabular-nums">
+                  {stats.commitsThisWeek}/{stats.weeklyCommitGoal}
+                </span>
+              </div>
+              <Progress
+                value={stats.commitGoalProgress ?? 0}
+                size="xs"
+                variant={
+                  (stats.commitGoalProgress ?? 0) >= 100 ? "success" : "default"
+                }
+              />
+            </div>
+          )}
+
+          <Link
+            href="/dashboard/coding-streak"
+            className="block text-center text-xs font-medium text-primary hover:underline pt-1"
+          >
+            View streak details →
+          </Link>
         </div>
       )}
     </WidgetCard>

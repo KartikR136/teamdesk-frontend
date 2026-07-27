@@ -9,6 +9,7 @@ import {
   ScrollText,
   CalendarClock,
   Rocket,
+  Flame,
 } from "lucide-react";
 import type { Role } from "@/types";
 
@@ -38,6 +39,7 @@ export const navigation: NavItem[] = [
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
   { label: "Decisions", href: "/dashboard/decisions", icon: ScrollText },
+  { label: "Coding Streak", href: "/dashboard/coding-streak", icon: Flame },
   // Only exists in demo deployments — mirrors the backend's DEMO_MODE gate.
   // Not a role restriction (no `roles` field): this hides the feature
   // entirely rather than showing it as disabled, since it isn't a "coming
