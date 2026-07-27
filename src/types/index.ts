@@ -488,3 +488,108 @@ export interface DoraMetrics {
   changeFailureRate: { percent: number } & DoraTierMetric;
   mttr: { hours: number | null; sampleSize: number } & DoraTierMetric;
 }
+
+// ---------------------------------------------------------------------
+// Build Health — mirrors the Deployment section above field-for-field.
+// Backed by prisma's BuildPipeline/BuildRun models +
+// routes/buildPipelines.ts + routes/ciWebhooks.ts.
+// ---------------------------------------------------------------------
+
+export type BuildProvider =
+  | "GITHUB_ACTIONS"
+  | "CIRCLECI"
+  | "GITLAB_CI"
+  | "BUILDKITE"
+  | "JENKINS"
+  | "NATIVE";
+
+export type BuildRunStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "PASSING"
+  | "FAILING"
+  | "CANCELLED";
+
+export interface BuildPipeline {
+  id: string;
+  name: string;
+  provider: BuildProvider;
+  defaultBranch: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  organizationId: string;
+  projectId: string | null;
+  createdById: string;
+  createdBy: { id: string; name: string };
+  project: { id: string; name: string } | null;
+  _count: { runs: number };
+  /** Only present on create/rotate responses — never on list responses. */
+  webhookUrl?: string;
+  /** Present on list responses instead of the secret itself. */
+  hasWebhook?: boolean;
+}
+
+export interface BuildRun {
+  id: string;
+  buildNumber: number;
+  status: BuildRunStatus;
+  branch: string;
+  commitHash: string;
+  commitMessage: string | null;
+  testsPassing: number;
+  testsFailing: number;
+  testsSkipped: number;
+  coveragePercent: number | null;
+  durationSeconds: number | null;
+  flakyTestNames: string[];
+  failureSummary: string | null;
+  logsUrl: string | null;
+  source: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  organizationId: string;
+  projectId: string | null;
+  pipelineId: string;
+  pullRequestId: string | null;
+  pipeline: { id: string; name: string; provider: BuildProvider };
+  project: { id: string; name: string } | null;
+  pullRequest: { id: string; title: string; repoName: string } | null;
+  triggeredBy: { id: string; name: string } | null;
+}
+
+export interface BuildHealthTrendPoint {
+  date: string;
+  totalRuns: number;
+  passRatePercent: number;
+  avgCoveragePercent: number;
+}
+
+export interface BuildHealthPipelineSummary {
+  id: string;
+  name: string;
+  provider: BuildProvider;
+  isActive: boolean;
+  defaultBranch: string;
+  totalRuns: number;
+  runsInWindow: number;
+  lastStatus: BuildRunStatus | null;
+  lastRunAt: string | null;
+}
+
+export interface BuildHealthAggregate {
+  windowDays: number;
+  latestRun: BuildRun | null;
+  summary: {
+    totalRuns: number;
+    passing: number;
+    failing: number;
+    passRatePercent: number | null;
+    avgCoveragePercent: number | null;
+    avgDurationSeconds: number | null;
+  };
+  trend: BuildHealthTrendPoint[];
+  flakyTests: { name: string; occurrences: number }[];
+  pipelines: BuildHealthPipelineSummary[];
+}

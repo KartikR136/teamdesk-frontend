@@ -1,14 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Activity, CheckCircle2, XCircle, Loader2, ArrowRight } from "lucide-react";
 import { WidgetCard, type WidgetStatus } from "./WidgetCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
-import { getMockDashboardData, type BuildHealth } from "@/mock/dashboard";
-import { isAbortError } from "@/lib/api";
+import { apiFetch, isAbortError } from "@/lib/api";
+
+// Matches BuildHealthDto in the backend's dashboard.dto.ts — now served
+// by NativeBuildHealthProvider (backed by BuildPipeline/BuildRun) instead
+// of the old always-empty MockBuildHealthProvider.
+interface BuildHealth {
+  pipelineStatus: "passing" | "failing" | "running";
+  latestBuildNumber: number;
+  coveragePercent: number;
+  testsPassing: number;
+  testsFailing: number;
+  avgBuildDurationSeconds: number;
+  lastUpdated: string;
+}
+
+// Shape returned by GET /api/dashboard/home — only the one field this
+// widget actually reads, matching DeploymentsCard.tsx's convention.
+interface DashboardHomeBuildHealthResponse {
+  buildHealth: BuildHealth;
+}
 
 const PIPELINE_CONFIG: Record<
   BuildHealth["pipelineStatus"],
@@ -41,25 +60,33 @@ export function BuildHealthCard() {
   const [status, setStatus] = useState<WidgetStatus>("loading");
   const [health, setHealth] = useState<BuildHealth | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void (async () => {
-      setStatus("loading");
-      try {
-        // TODO: Replace with `apiFetch<DashboardHomeResponse>(
-        //   "/api/dashboard/home", { signal: controller.signal },
-        // )` and read `.buildHealth`.
-        await new Promise((r) => setTimeout(r, 300));
-        if (controller.signal.aborted) return;
-        setHealth(getMockDashboardData().buildHealth);
-        setStatus("ready");
-      } catch (err) {
+  const load = useCallback((signal?: AbortSignal) => {
+    setStatus("loading");
+    return apiFetch<DashboardHomeBuildHealthResponse>("/api/dashboard/home", {
+      signal,
+    })
+      .then((data) => {
+        setHealth(data.buildHealth);
+        // latestBuildNumber === 0 is NativeBuildHealthProvider's signal
+        // for "no pipeline has reported a build yet" (see
+        // integrationRequired in the provider) — same "empty array"
+        // convention DeploymentsCard uses, just expressed for a
+        // single-object result.
+        setStatus(data.buildHealth.latestBuildNumber === 0 ? "empty" : "ready");
+      })
+      .catch((err) => {
         if (isAbortError(err)) return;
         setStatus("error");
-      }
-    })();
-    return () => controller.abort();
+      });
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      void load(controller.signal);
+    });
+    return () => controller.abort();
+  }, [load]);
 
   const pipeline = health ? PIPELINE_CONFIG[health.pipelineStatus] : null;
 
@@ -68,7 +95,7 @@ export function BuildHealthCard() {
       title="Build Health"
       icon={<Activity size={15} />}
       status={status}
-      onRetry={() => setStatus("loading")}
+      onRetry={() => void load()}
       skeleton={
         <div className="space-y-4">
           <Skeleton className="h-6 w-32" />
@@ -83,9 +110,17 @@ export function BuildHealthCard() {
       emptyState={
         <EmptyState
           icon={<Activity size={26} />}
-          title="No CI/CD data yet"
-          description="Connect a pipeline provider to see build health here."
+          title="No builds reported yet"
+          description="Trigger a demo build or point a real CI job at your pipeline's webhook to see build health here."
           compact
+          action={
+            <Link
+              href="/dashboard/build-health"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Set up a pipeline
+            </Link>
+          }
         />
       }
     >
@@ -154,6 +189,14 @@ export function BuildHealthCard() {
               <p className="text-[11px] text-text-subtle">Avg build</p>
             </div>
           </div>
+
+          <Link
+            href="/dashboard/build-health"
+            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            View build history & pipelines
+            <ArrowRight size={12} />
+          </Link>
         </div>
       )}
     </WidgetCard>
