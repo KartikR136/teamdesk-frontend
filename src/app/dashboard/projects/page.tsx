@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { FolderKanban, Plus, ChevronRight, AlertCircle } from "lucide-react";
+import {
+  FolderKanban,
+  Plus,
+  ArrowRight,
+  AlertCircle,
+  Search,
+  X,
+} from "lucide-react";
 import { useOrg } from "@/providers/OrgProvider";
 import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
@@ -15,11 +22,46 @@ import { EmptyState, EmptyStateCard } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
 import type { Project, PaginatedResponse } from "@/types";
 
+/* A small deterministic accent per project so the grid doesn't look like
+   a wall of identical cards — picked from the project id, not random,
+   so it stays stable across renders/reloads. */
+const ACCENTS = [
+  "bg-primary-subtle text-primary",
+  "bg-info-subtle text-info",
+  "bg-success-subtle text-success",
+  "bg-warning-subtle text-warning",
+];
+
+function accentFor(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++)
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return ACCENTS[hash % ACCENTS.length];
+}
+
+function initials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function ProjectsPage() {
   const { currentOrg } = useOrg();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -66,24 +108,40 @@ export default function ProjectsPage() {
   const canCreate =
     currentOrg && ["ADMIN", "MANAGER", "MEMBER"].includes(currentOrg.role);
 
+  const filtered = useMemo(() => {
+    if (!query.trim()) return projects;
+    const q = query.trim().toLowerCase();
+    return projects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q),
+    );
+  }, [projects, query]);
+
+  const totalOpenIssues = projects.reduce(
+    (sum, p) => sum + (p._count?.issues ?? 0),
+    0,
+  );
+
   return (
     <ProtectedRoute>
       <DashboardShell>
-        <div className="max-w-3xl mx-auto px-6 py-8">
-          <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight text-text">
+              <h1 className="text-2xl font-semibold tracking-tight text-text mb-1">
                 Projects
               </h1>
-              <p className="text-sm text-text-muted mt-0.5">
+              <p className="text-sm text-text-muted">
                 {projects.length}{" "}
-                {projects.length === 1 ? "project" : "projects"} in{" "}
+                {projects.length === 1 ? "project" : "projects"} ·{" "}
+                {totalOpenIssues} open issues in{" "}
                 {currentOrg?.name ?? "this organization"}
               </p>
             </div>
             {canCreate && !creating && (
               <Button
-                size="sm"
                 leftIcon={<Plus size={14} />}
                 onClick={() => setCreating(true)}
               >
@@ -92,12 +150,13 @@ export default function ProjectsPage() {
             )}
           </div>
 
+          {/* Inline create form */}
           {creating && (
             <motion.form
               onSubmit={handleCreateProject}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              className="overflow-hidden mb-5"
+              className="overflow-hidden mb-6 rounded-xl border border-border bg-surface p-4"
             >
               <div className="flex gap-2">
                 <Input
@@ -131,20 +190,47 @@ export default function ProjectsPage() {
             </motion.form>
           )}
 
-          {loading ? (
-            <div className="space-y-2">
-              {[0, 1, 2].map((i) => (
+          {/* Search */}
+          {!loading && projects.length > 0 && (
+            <div className="mb-6 max-w-sm">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Filter projects…"
+                leftSlot={<Search size={14} />}
+                rightSlot={
+                  query ? (
+                    <button
+                      onClick={() => setQuery("")}
+                      className="pointer-events-auto text-text-subtle hover:text-text"
+                      aria-label="Clear filter"
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
+
+          {/* Loading */}
+          {loading && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
+                  className="rounded-2xl border border-border bg-surface p-5"
                 >
-                  <Skeleton className="h-5 w-5 rounded" />
-                  <Skeleton className="h-4 flex-1" />
-                  <Skeleton className="h-5 w-16 rounded-pill" />
+                  <Skeleton className="h-10 w-10 rounded-xl mb-4" />
+                  <Skeleton className="h-4 w-3/4 mb-2" />
+                  <Skeleton className="h-3 w-1/2" />
                 </div>
               ))}
             </div>
-          ) : projects.length === 0 ? (
+          )}
+
+          {/* Empty */}
+          {!loading && projects.length === 0 && (
             <EmptyStateCard>
               <EmptyState
                 icon={<FolderKanban size={30} />}
@@ -163,51 +249,68 @@ export default function ProjectsPage() {
                 }
               />
             </EmptyStateCard>
-          ) : (
-            <ul className="space-y-1.5">
-              {projects.map((project, i) => (
-                <motion.li
+          )}
+
+          {/* No search results */}
+          {!loading && projects.length > 0 && filtered.length === 0 && (
+            <p className="text-sm text-text-muted py-12 text-center">
+              No projects match &ldquo;{query}&rdquo;.
+            </p>
+          )}
+
+          {/* Card grid */}
+          {!loading && filtered.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map((project, i) => (
+                <motion.div
                   key={project.id}
-                  initial={{ opacity: 0, y: 6 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04, duration: 0.3 }}
+                  transition={{ delay: Math.min(i, 8) * 0.04, duration: 0.3 }}
                 >
                   <Link href={`/dashboard/projects/${project.id}`}>
                     <div
                       className={cn(
-                        "group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5",
-                        "hover:border-border-hover hover:shadow-sm hover:-translate-y-px",
+                        "group relative h-full flex flex-col rounded-2xl border border-border bg-surface p-5",
+                        "hover:border-border-hover hover:shadow-md hover:-translate-y-0.5",
                         "transition-all duration-normal",
                       )}
                     >
-                      <FolderKanban
-                        size={17}
-                        className="text-text-subtle shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-text group-hover:text-primary transition-colors truncate">
-                          {project.name}
-                        </p>
-                        {project.description && (
-                          <p className="text-xs text-text-subtle truncate">
-                            {project.description}
-                          </p>
+                      <div className="flex items-start justify-between mb-4">
+                        <div
+                          className={cn(
+                            "h-10 w-10 rounded-xl flex items-center justify-center text-sm font-semibold shrink-0",
+                            accentFor(project.id),
+                          )}
+                        >
+                          {initials(project.name) || <FolderKanban size={16} />}
+                        </div>
+                        <ArrowRight
+                          size={16}
+                          className="text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition-all mt-2"
+                        />
+                      </div>
+
+                      <p className="text-sm font-semibold text-text mb-1 leading-snug truncate">
+                        {project.name}
+                      </p>
+                      <p className="text-xs text-text-subtle leading-relaxed line-clamp-2 mb-4 flex-1">
+                        {project.description || "No description yet."}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-border text-xs text-text-subtle">
+                        <span>{formatDate(project.createdAt)}</span>
+                        {project._count && (
+                          <span className="font-medium text-text-muted">
+                            {project._count.issues} open
+                          </span>
                         )}
                       </div>
-                      {project._count && (
-                        <span className="text-xs text-text-subtle shrink-0">
-                          {project._count.issues} open
-                        </span>
-                      )}
-                      <ChevronRight
-                        size={14}
-                        className="text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0"
-                      />
                     </div>
                   </Link>
-                </motion.li>
+                </motion.div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </DashboardShell>

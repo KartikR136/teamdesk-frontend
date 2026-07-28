@@ -3,9 +3,10 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { MobileSidebar } from "./MobileSidebar";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -102,15 +103,7 @@ export function Header() {
 
           <OrgSwitcher />
 
-          {/* Notifications placeholder */}
-          <Tooltip content="Notifications — coming soon">
-            <button
-              className="h-8 w-8 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors duration-fast"
-              aria-label="Notifications (coming soon)"
-            >
-              <Bell size={16} />
-            </button>
-          </Tooltip>
+          <NotificationBell />
 
           <Dropdown>
             <DropdownTrigger

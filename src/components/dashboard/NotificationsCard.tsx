@@ -1,104 +1,57 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import {
-  Bell,
-  UserPlus,
-  MessageSquare,
-  CheckCircle2,
-  AtSign,
-  Rocket,
-  GitMerge,
-} from "lucide-react";
+import { Bell } from "lucide-react";
 import { WidgetCard, type WidgetStatus } from "./WidgetCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
-import {
-  getMockDashboardData,
-  type DashboardNotification,
-  type NotificationKind,
-} from "@/mock/dashboard";
 import { isAbortError } from "@/lib/api";
-
-// Same icon-badge + relative-time visual language ActivityFeed already
-// established elsewhere in the app — kept consistent rather than
-// inventing a new notification-icon style just for this widget.
-const KIND_CONFIG: Record<
-  NotificationKind,
-  { icon: React.ReactNode; color: string }
-> = {
-  ISSUE_ASSIGNED: {
-    icon: <UserPlus size={13} />,
-    color: "text-primary bg-primary-subtle",
-  },
-  COMMENT_ADDED: {
-    icon: <MessageSquare size={13} />,
-    color: "text-text-muted bg-surface-hover",
-  },
-  DECISION_APPROVED: {
-    icon: <CheckCircle2 size={13} />,
-    color: "text-success bg-success-subtle",
-  },
-  MENTIONED: {
-    icon: <AtSign size={13} />,
-    color: "text-warning bg-warning-subtle",
-  },
-  DEPLOYMENT_COMPLETED: {
-    icon: <Rocket size={13} />,
-    color: "text-primary bg-primary-subtle",
-  },
-  PR_MERGED: {
-    icon: <GitMerge size={13} />,
-    color: "text-success bg-success-subtle",
-  },
-};
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
+import {
+  listNotifications,
+  markNotificationRead,
+  type NotificationItem,
+} from "@/lib/notificationsApi";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
+import {
+  NOTIFICATION_VISUALS,
+  relativeTime,
+} from "@/components/notifications/notificationVisuals";
 
 function NotificationRow({
   entry,
   index,
+  onRead,
 }: {
-  entry: DashboardNotification;
+  entry: NotificationItem;
   index: number;
+  onRead: (id: string) => void;
 }) {
-  const cfg = KIND_CONFIG[entry.kind];
+  const visual = NOTIFICATION_VISUALS[entry.type];
   return (
     <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.25 }}
+      onClick={() => !entry.read && onRead(entry.id)}
       className={cn(
-        "flex items-start gap-2.5 py-2.5 px-2 -mx-2 rounded-md hover:bg-surface-hover transition-colors duration-fast",
+        "flex items-start gap-2.5 py-2.5 px-2 -mx-2 rounded-md hover:bg-surface-hover transition-colors duration-fast cursor-pointer",
       )}
     >
       <span
         className={cn(
           "h-6 w-6 rounded-md flex items-center justify-center shrink-0 mt-0.5",
-          cfg.color,
+          visual.color,
         )}
       >
-        {cfg.icon}
+        {visual.icon}
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-text leading-snug">
-          <span className="font-medium">{entry.actorName}</span> {entry.message}
-          {entry.groupCount && entry.groupCount > 1 && (
-            <span className="text-text-subtle">
-              {" "}
-              and {entry.groupCount - 1} more
-            </span>
-          )}
+          <span className="font-medium">{entry.actorName}</span>{" "}
+          {entry.message}
         </p>
         <span className="text-xs text-text-subtle">
           {relativeTime(entry.createdAt)}
@@ -116,23 +69,17 @@ function NotificationRow({
 
 export function NotificationsCard() {
   const [status, setStatus] = useState<WidgetStatus>("loading");
-  const [notifications, setNotifications] = useState<DashboardNotification[]>(
-    [],
-  );
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       setStatus("loading");
       try {
-        // TODO: Replace with `apiFetch<DashboardHomeResponse>(
-        //   "/api/dashboard/home", { signal: controller.signal },
-        // )` and read `.notifications` from the response.
-        await new Promise((r) => setTimeout(r, 300));
+        const res = await listNotifications({ limit: 8 }, controller.signal);
         if (controller.signal.aborted) return;
-        const data = getMockDashboardData().notifications;
-        setNotifications(data);
-        setStatus(data.length === 0 ? "empty" : "ready");
+        setNotifications(res.data);
+        setStatus(res.data.length === 0 ? "empty" : "ready");
       } catch (err) {
         if (isAbortError(err)) return;
         setStatus("error");
@@ -140,6 +87,22 @@ export function NotificationsCard() {
     })();
     return () => controller.abort();
   }, []);
+
+  // Live push keeps this widget in sync with the header bell / full
+  // notification center without any of the three needing to know about
+  // each other — they all just independently subscribe to the same SSE
+  // stream and reconcile local state.
+  useNotificationStream((notification) => {
+    setNotifications((prev) => [notification, ...prev].slice(0, 8));
+    setStatus("ready");
+  });
+
+  const handleRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+    markNotificationRead(id).catch(() => {});
+  };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -152,7 +115,14 @@ export function NotificationsCard() {
           <span className="text-xs font-medium text-primary bg-primary-subtle px-2 py-0.5 rounded-full">
             {unreadCount} unread
           </span>
-        ) : undefined
+        ) : (
+          <Link
+            href="/dashboard/notifications"
+            className="text-xs font-medium text-text-subtle hover:text-text transition-colors"
+          >
+            View all
+          </Link>
+        )
       }
       status={status}
       onRetry={() => setStatus("loading")}
@@ -180,7 +150,7 @@ export function NotificationsCard() {
       contentClassName="divide-y divide-border -my-1"
     >
       {notifications.map((n, i) => (
-        <NotificationRow key={n.id} entry={n} index={i} />
+        <NotificationRow key={n.id} entry={n} index={i} onRead={handleRead} />
       ))}
     </WidgetCard>
   );

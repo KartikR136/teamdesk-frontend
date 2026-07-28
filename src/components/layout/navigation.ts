@@ -11,6 +11,7 @@ import {
   Rocket,
   Flame,
   Rows3,
+  Bell,
 } from "lucide-react";
 import type { Role } from "@/types";
 
@@ -39,6 +40,7 @@ export const navigation: NavItem[] = [
   { label: "Deployments", href: "/dashboard/deployments", icon: Rocket },
   { label: "Members", href: "/dashboard/members", icon: Users },
   { label: "My invites", href: "/dashboard/invitations", icon: Mail },
+  { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
   { label: "Activity", href: "/dashboard/activity", icon: Activity },
   { label: "Decisions", href: "/dashboard/decisions", icon: ScrollText },
   { label: "Coding Streak", href: "/dashboard/coding-streak", icon: Flame },

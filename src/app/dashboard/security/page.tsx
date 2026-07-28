@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Play } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import {
-  Card,
-  CardHeader,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/Card";
+  ShieldCheck,
+  ShieldAlert,
+  Play,
+  PlayCircle,
+  Loader2,
+  Lock,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -33,6 +36,7 @@ export default function SecurityPage() {
   const [scenarios, setScenarios] = useState<ScenarioSummary[] | null>(null);
   const [results, setResults] = useState<Record<string, ScenarioResult>>({});
   const [running, setRunning] = useState<Record<string, boolean>>({});
+  const [runningAll, setRunningAll] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,96 +90,199 @@ export default function SecurityPage() {
     }
   }
 
+  async function runAll() {
+    if (!scenarios) return;
+    setRunningAll(true);
+    for (const s of scenarios) {
+      await runScenario(s.id);
+    }
+    setRunningAll(false);
+  }
+
+  const total = scenarios?.length ?? 0;
+  const ranCount = Object.keys(results).length;
+  const passedCount = Object.values(results).filter((r) => r.passed).length;
+  const anyRunning = useMemo(
+    () => Object.values(running).some(Boolean),
+    [running],
+  );
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text">Security</h1>
-        <p className="text-sm text-text-subtle mt-1">
-          Live demonstrations of the authorization boundary described in{" "}
-          <code className="font-mono text-xs">THREAT_MODEL.md</code>. Each
-          scenario performs a real attack attempt against seeded demo data
-          through the actual API — nothing here is mocked.
-        </p>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="h-8 w-8 rounded-lg bg-primary-subtle flex items-center justify-center">
+              <Lock size={15} className="text-primary" />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-text">
+              Attack Console
+            </h1>
+          </div>
+          <p className="text-sm text-text-muted leading-relaxed max-w-xl">
+            Live demonstrations of the authorization boundary described in{" "}
+            <code className="font-mono text-xs bg-surface-hover px-1 py-0.5 rounded">
+              THREAT_MODEL.md
+            </code>
+            . Each scenario is a real attack against seeded demo data through
+            the actual API — nothing here is mocked.
+          </p>
+        </div>
+
+        {scenarios && scenarios.length > 0 && (
+          <Button
+            onClick={runAll}
+            disabled={runningAll || anyRunning}
+            leftIcon={
+              runningAll ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <PlayCircle size={14} />
+              )
+            }
+          >
+            {runningAll ? "Running all…" : "Run all scenarios"}
+          </Button>
+        )}
       </div>
 
+      {/* Summary strip */}
+      {scenarios && scenarios.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-xs text-text-muted mb-1">Scenarios</p>
+            <p className="text-xl font-semibold text-text tracking-tight">
+              {total}
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-xs text-text-muted mb-1">Run so far</p>
+            <p className="text-xl font-semibold text-text tracking-tight">
+              {ranCount}/{total}
+            </p>
+          </div>
+          <div
+            className={cn(
+              "rounded-xl border p-4",
+              ranCount > 0 && passedCount === ranCount
+                ? "border-success/30 bg-success-subtle/40"
+                : "border-border bg-surface",
+            )}
+          >
+            <p className="text-xs text-text-muted mb-1">Blocked</p>
+            <p
+              className={cn(
+                "text-xl font-semibold tracking-tight",
+                ranCount > 0 && passedCount === ranCount
+                  ? "text-success"
+                  : "text-text",
+              )}
+            >
+              {passedCount}/{ranCount || total}
+            </p>
+          </div>
+        </div>
+      )}
+
       {loadError && (
-        <Card className="border-danger/40">
-          <CardContent>
-            <p className="text-sm text-danger">{loadError}</p>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-danger/40 bg-danger-subtle/30 p-4">
+          <p className="text-sm text-danger">{loadError}</p>
+        </div>
       )}
 
       {!scenarios && !loadError && (
-        <div className="space-y-4">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+        <div className="grid sm:grid-cols-2 gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-40 w-full rounded-xl" />
           ))}
         </div>
       )}
 
-      {scenarios?.map((scenario) => {
-        const result = results[scenario.id];
-        const isRunning = running[scenario.id];
+      {/* Scenario grid */}
+      {scenarios && scenarios.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {scenarios.map((scenario, i) => {
+            const result = results[scenario.id];
+            const isRunning = running[scenario.id];
 
-        return (
-          <Card key={scenario.id}>
-            <CardHeader className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-text">
-                  {scenario.title}
-                </p>
-              </div>
-              {result && (
-                <Badge variant={result.passed ? "success" : "danger"}>
-                  <span className="flex items-center gap-1">
-                    {result.passed ? (
-                      <ShieldCheck size={12} />
-                    ) : (
-                      <ShieldAlert size={12} />
-                    )}
-                    {result.passed ? "Blocked" : "Not blocked"}
-                  </span>
-                </Badge>
-              )}
-            </CardHeader>
-
-            <CardContent className="space-y-3">
-              <p className="text-sm text-text-muted">{scenario.description}</p>
-
-              {result && (
-                <div className="text-xs space-y-1 pt-2 border-t border-border">
-                  <p className="text-text-subtle">
-                    <span className="font-medium text-text">Expected: </span>
-                    {result.expectedOutcome}
-                  </p>
-                  <p className="text-text-subtle">
-                    <span className="font-medium text-text">Actual: </span>
-                    {result.actualOutcome}
-                  </p>
-                  <p className="text-text-subtle font-mono">
-                    {result.mechanism}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-
-            <CardFooter>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => runScenario(scenario.id)}
-                disabled={isRunning}
+            return (
+              <motion.div
+                key={scenario.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(i, 8) * 0.05, duration: 0.3 }}
+                className={cn(
+                  "flex flex-col rounded-xl border bg-surface p-4",
+                  result
+                    ? result.passed
+                      ? "border-success/30"
+                      : "border-danger/40"
+                    : "border-border",
+                )}
               >
-                <span className="flex items-center gap-1.5">
-                  <Play size={14} />
-                  {isRunning ? "Running…" : "Run Attack"}
-                </span>
-              </Button>
-            </CardFooter>
-          </Card>
-        );
-      })}
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <p className="text-sm font-medium text-text leading-snug">
+                    {scenario.title}
+                  </p>
+                  {result && (
+                    <Badge
+                      variant={result.passed ? "success" : "danger"}
+                      className="shrink-0"
+                    >
+                      <span className="flex items-center gap-1">
+                        {result.passed ? (
+                          <ShieldCheck size={12} />
+                        ) : (
+                          <ShieldAlert size={12} />
+                        )}
+                        {result.passed ? "Blocked" : "Not blocked"}
+                      </span>
+                    </Badge>
+                  )}
+                </div>
+
+                <p className="text-xs text-text-muted leading-relaxed mb-3 flex-1">
+                  {scenario.description}
+                </p>
+
+                {result && (
+                  <div className="text-xs space-y-1 mb-3 pt-3 border-t border-border">
+                    <p className="text-text-subtle">
+                      <span className="font-medium text-text">Expected: </span>
+                      {result.expectedOutcome}
+                    </p>
+                    <p className="text-text-subtle">
+                      <span className="font-medium text-text">Actual: </span>
+                      {result.actualOutcome}
+                    </p>
+                    <p className="text-text-subtle font-mono text-[11px] leading-relaxed">
+                      {result.mechanism}
+                    </p>
+                  </div>
+                )}
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => runScenario(scenario.id)}
+                  disabled={isRunning || runningAll}
+                  className="self-start"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {isRunning ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Play size={14} />
+                    )}
+                    {isRunning ? "Running…" : "Run attack"}
+                  </span>
+                </Button>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

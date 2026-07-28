@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { Hero } from "@/components/marketing/Hero";
+import { ProductTourSection } from "@/components/marketing/ProductTourSection";
 import { FeaturesSection } from "@/components/marketing/FeaturesSection";
 import { SecuritySection } from "@/components/marketing/SecuritySection";
 import { CollaborationSection } from "@/components/marketing/CollaborationSection";
@@ -34,6 +35,7 @@ export default function Home() {
 
       <main className="flex-1">
         <Hero />
+        <ProductTourSection />
         <FeaturesSection />
         <SecuritySection />
         <CollaborationSection />
