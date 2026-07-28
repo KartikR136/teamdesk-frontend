@@ -5,7 +5,9 @@ import { motion, type Variants } from "framer-motion";
 import { ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useOrg } from "@/providers/OrgProvider";
-import { SearchBar } from "./SearchBar";
+import { useCommandPalette } from "@/components/ui/CommandPalette";
+import { KBD } from "@/components/ui/KBD";
+import { Search } from "lucide-react";
 
 function timeOfDay(): string {
   const h = new Date().getHours();
@@ -52,6 +54,7 @@ const item: Variants = {
 export function DeveloperHero({ name }: { name: string | undefined }) {
   const firstName = name?.split(" ")[0] ?? "";
   const { currentOrg } = useOrg();
+  const { openPalette } = useCommandPalette();
   const canCreate =
     currentOrg && ["ADMIN", "MANAGER", "MEMBER"].includes(currentOrg.role);
 
@@ -81,9 +84,22 @@ export function DeveloperHero({ name }: { name: string | undefined }) {
         </motion.p>
       </div>
 
-      {/* Command bar entry point */}
+      {/* Command bar entry point — this used to render a disabled,
+          hard-coded SearchBar with its own dead ⌘K listener (a duplicate
+          of CommandPaletteProvider's real one in DashboardShell). Now it
+          just opens the same live command palette everything else uses,
+          so there's exactly one search/command surface in the app, not
+          two competing for the same shortcut. */}
       <motion.div variants={item} className="flex items-center gap-2">
-        <SearchBar />
+        <button
+          onClick={openPalette}
+          className="hidden sm:flex items-center gap-2 h-9 px-3 rounded-md text-sm text-text-subtle bg-surface-hover/60 border border-transparent hover:border-border hover:bg-surface transition-colors duration-fast"
+          aria-label="Search issues, projects, developers (⌘K)"
+        >
+          <Search size={14} />
+          <span>Search issues, projects, developers…</span>
+          <KBD>⌘K</KBD>
+        </button>
         {canCreate && (
           <Link href="/dashboard/decisions/new">
             <Button

@@ -56,6 +56,9 @@ export interface Issue {
   status: IssueStatus;
   projectId: string;
   assignee: { id: string; name: string } | null;
+  /** Additive, optional — see prisma Sprint model. Absent on issues never
+   * assigned to a sprint. */
+  sprintId?: string | null;
 }
 
 // Confirmed against prisma/schema.prisma's Issue model and the new
@@ -592,4 +595,42 @@ export interface BuildHealthAggregate {
   trend: BuildHealthTrendPoint[];
   flakyTests: { name: string; occurrences: number }[];
   pipelines: BuildHealthPipelineSummary[];
+}
+
+// ── Sprints — Quick Actions milestone ──────────────────────────────────
+// Mirrors the Sprint model in prisma/schema.prisma exactly.
+
+export type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED";
+
+export const SPRINT_STATUSES: { value: SprintStatus; label: string }[] = [
+  { value: "PLANNED", label: "Planned" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "COMPLETED", label: "Completed" },
+];
+
+export interface Sprint {
+  id: string;
+  name: string;
+  goal: string | null;
+  status: SprintStatus;
+  startDate: string;
+  endDate: string;
+  createdAt: string;
+  projectId: string;
+  project: { id: string; name: string };
+  _count: { issues: number };
+}
+
+export interface SprintProgress {
+  totalIssues: number;
+  doneIssues: number;
+  percentComplete: number;
+  totalPoints: number;
+  donePoints: number;
+}
+
+export interface SprintDetail extends Sprint {
+  createdBy: { id: string; name: string };
+  issues: Issue[];
+  progress: SprintProgress;
 }

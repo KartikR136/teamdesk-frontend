@@ -2,10 +2,22 @@ import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { CommandPaletteProvider } from "@/components/ui/CommandPalette";
+import { QuickActionsProvider } from "@/components/quickActions/QuickActionsProvider";
+import { useGlobalShortcuts } from "@/components/quickActions/useGlobalShortcuts";
+
+// Thin mount point so useGlobalShortcuts (which needs useQuickActions'
+// context) runs inside QuickActionsProvider without every consumer of
+// DashboardShell having to know that wiring detail.
+function GlobalShortcuts() {
+  useGlobalShortcuts();
+  return null;
+}
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   return (
-    <CommandPaletteProvider>
+    <QuickActionsProvider>
+      <CommandPaletteProvider>
+        <GlobalShortcuts />
       {/* WCAG 2.4.1 (Bypass Blocks): first focusable element on every
           authenticated page. Visually hidden until it receives keyboard
           focus (sr-only + focus-visible overrides), so mouse users never
@@ -31,5 +43,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </div>
       </div>
     </CommandPaletteProvider>
+    </QuickActionsProvider>
   );
 }

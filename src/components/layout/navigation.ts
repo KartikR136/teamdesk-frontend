@@ -10,6 +10,7 @@ import {
   CalendarClock,
   Rocket,
   Flame,
+  Rows3,
 } from "lucide-react";
 import type { Role } from "@/types";
 
@@ -33,6 +34,7 @@ export interface NavItem {
 // Sidebar.tsx and MobileSidebar.tsx just map over it, no rewrite needed.
 export const navigation: NavItem[] = [
   { label: "Projects", href: "/dashboard/projects", icon: LayoutDashboard },
+  { label: "Sprints", href: "/dashboard/sprints", icon: Rows3 },
   { label: "Meetings", href: "/dashboard/meetings", icon: CalendarClock },
   { label: "Deployments", href: "/dashboard/deployments", icon: Rocket },
   { label: "Members", href: "/dashboard/members", icon: Users },
